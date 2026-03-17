@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Layout from '@/components/layout/Layout';
 import SimpleSessionSelector from '@/components/dashboard/SimpleSessionSelector';
 import SimpleDriverCard from '@/components/dashboard/SimpleDriverCard';
 import TelemetryChart from '@/components/charts/TelemetryChart';
 import Leaderboard from '@/components/dashboard/Leaderboard';
+import TrackMap, { DriverPosition, DriverInfo } from '@/components/dashboard/TrackMap';
 import ConnectionStatus, { F1ConnectionIndicator } from '@/components/ui/ConnectionStatus';
 import useWebSocket from '@/hooks/useWebSocket';
 
@@ -20,29 +21,36 @@ interface Driver {
   country_code: string;
 }
 
-interface CarData {
-  speed: number;
-  throttle: number;
-  brake: number;
-  gear: number;
-  rpm: number;
-  drs: number;
-  date: string;
-  driver_number: number;
-}
-
 interface Position {
   position: number;
   date: string;
   driver_number: number;
+  x?: number;
+  y?: number;
+  z?: number;
+}
+
+interface Session {
+  session_key: number;
+  meeting_key: number;
+  location: string;
+  session_type: string;
+  session_name: string;
+  circuit_key?: number;
+  circuit_short_name?: string;
+  country_name: string;
+  date_start: string;
+  date_end: string;
+  year: number;
 }
 
 export default function DashboardPage() {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
+  const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<number[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [, setIsLoading] = useState(false);
 
   // WebSocket connection
   const {
@@ -51,7 +59,6 @@ export default function DashboardPage() {
     telemetry,
     lastHeartbeat,
     subscribe,
-    disconnect,
     connect,
   } = useWebSocket({
     autoConnect: false,
@@ -62,7 +69,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedSession) {
       fetchDrivers();
+      fetchSessionInfo();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession]);
 
   // Subscribe to WebSocket when session and drivers are selected
@@ -82,10 +91,58 @@ export default function DashboardPage() {
       // Fetch positions via HTTP as fallback
       fetchPositions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetry]);
 
   // Convert WebSocket telemetry to chart format
   const telemetryData = telemetry;
+
+  // Convert positions to track map format with normalized coordinates
+  const trackMapPositions: DriverPosition[] = useMemo(() => {
+    return positions.map(pos => {
+      const telemetryData = telemetry.get(pos.driver_number);
+      const latestTelemetry = telemetryData?.[telemetryData.length - 1];
+      
+      // Normalize x/y to 0-1000 scale (assuming OpenF1 API uses 1/10 meter units)
+      // Real coordinates need to be normalized based on track bounds
+      const x = pos.x ?? 500; // Default to center if no data
+      const y = pos.y ?? 500;
+      
+      return {
+        driver_number: pos.driver_number,
+        x: x,
+        y: y,
+        z: pos.z,
+        position: pos.position,
+        speed: latestTelemetry?.speed,
+        drs: latestTelemetry?.drs,
+        date: pos.date,
+      };
+    });
+  }, [positions, telemetry]);
+
+  // Convert drivers to track map format
+  const trackMapDrivers: DriverInfo[] = useMemo(() => {
+    return drivers.map(driver => ({
+      driver_number: driver.driver_number,
+      name_acronym: driver.name_acronym,
+      first_name: driver.first_name,
+      last_name: driver.last_name,
+      team_name: driver.team_name,
+      team_colour: driver.team_colour,
+    }));
+  }, [drivers]);
+
+  const fetchSessionInfo = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/telemetry/sessions`);
+      const data = await response.json();
+      const session = data.find((s: Session) => s.session_key === selectedSession);
+      setSessionInfo(session || null);
+    } catch (error) {
+      console.error('Failed to fetch session info:', error);
+    }
+  };
 
   const fetchDrivers = async () => {
     try {
@@ -102,14 +159,15 @@ export default function DashboardPage() {
   const fetchPositions = async () => {
     try {
       const response = await fetch(
-        `http://localhost:8000/api/telemetry/position?session_key=${selectedSession}&limit=50`
+        `http://localhost:8000/api/telemetry/position?session_key=${selectedSession}&limit=100`
       );
       const data = await response.json();
       
       // Get latest position for each driver
       const latestPositions: { [key: number]: Position } = {};
       data.data?.forEach((pos: Position) => {
-        if (!latestPositions[pos.driver_number]) {
+        if (!latestPositions[pos.driver_number] || 
+            new Date(pos.date) > new Date(latestPositions[pos.driver_number].date)) {
           latestPositions[pos.driver_number] = pos;
         }
       });
@@ -145,6 +203,11 @@ export default function DashboardPage() {
       
       return updated;
     });
+  };
+
+  const handleDriverClick = (driverNumber: number) => {
+    // Toggle driver selection when clicking on track map
+    handleDriverToggle(driverNumber);
   };
 
   return (
@@ -255,45 +318,64 @@ export default function DashboardPage() {
               </motion.div>
             )}
 
-            {/* Telemetry Charts */}
+            {/* Track Map and Telemetry Grid */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
-              className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2"
+              className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3"
             >
-              <TelemetryChart
-                title="Speed (km/h)"
-                data={telemetryData}
-                dataKey="speed"
-                color="#e10600"
-                selectedDrivers={selectedDrivers}
-                drivers={drivers}
-              />
-              <TelemetryChart
-                title="Throttle (%)"
-                data={telemetryData}
-                dataKey="throttle"
-                color="#00d2be"
-                selectedDrivers={selectedDrivers}
-                drivers={drivers}
-              />
-              <TelemetryChart
-                title="Brake"
-                data={telemetryData}
-                dataKey="brake"
-                color="#ff8700"
-                selectedDrivers={selectedDrivers}
-                drivers={drivers}
-              />
-              <TelemetryChart
-                title="RPM"
-                data={telemetryData}
-                dataKey="rpm"
-                color="#871aff"
-                selectedDrivers={selectedDrivers}
-                drivers={drivers}
-              />
+              {/* Track Map - Takes 1 column on large screens */}
+              <div className="lg:col-span-1">
+                <h2 className="mb-4 text-xl font-semibold text-white">Track Map</h2>
+                <TrackMap
+                  circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
+                  positions={trackMapPositions}
+                  drivers={trackMapDrivers}
+                  selectedDrivers={selectedDrivers}
+                  onDriverClick={handleDriverClick}
+                  showDRSZones={true}
+                  showSectors={true}
+                  size="md"
+                  className="aspect-square"
+                />
+              </div>
+
+              {/* Telemetry Charts - Takes 2 columns on large screens */}
+              <div className="lg:col-span-2 grid grid-cols-1 gap-6 md:grid-cols-2">
+                <TelemetryChart
+                  title="Speed (km/h)"
+                  data={telemetryData}
+                  dataKey="speed"
+                  color="#e10600"
+                  selectedDrivers={selectedDrivers}
+                  drivers={drivers}
+                />
+                <TelemetryChart
+                  title="Throttle (%)"
+                  data={telemetryData}
+                  dataKey="throttle"
+                  color="#00d2be"
+                  selectedDrivers={selectedDrivers}
+                  drivers={drivers}
+                />
+                <TelemetryChart
+                  title="Brake"
+                  data={telemetryData}
+                  dataKey="brake"
+                  color="#ff8700"
+                  selectedDrivers={selectedDrivers}
+                  drivers={drivers}
+                />
+                <TelemetryChart
+                  title="RPM"
+                  data={telemetryData}
+                  dataKey="rpm"
+                  color="#871aff"
+                  selectedDrivers={selectedDrivers}
+                  drivers={drivers}
+                />
+              </div>
             </motion.div>
 
             {/* Leaderboard */}
