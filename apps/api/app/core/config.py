@@ -8,7 +8,16 @@ from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+import os
+
+_current_file = Path(__file__).resolve()
+# In local development, the root is 4 levels up. In Docker, it's /app.
+try:
+    PROJECT_ROOT = _current_file.parents[4]
+    if not (PROJECT_ROOT / "apps").exists() and not (PROJECT_ROOT / "packages").exists():
+        PROJECT_ROOT = Path("/app")
+except IndexError:
+    PROJECT_ROOT = Path("/app")
 
 
 class Settings(BaseSettings):
