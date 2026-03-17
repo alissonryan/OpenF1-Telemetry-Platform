@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<number[]>([]);
-  const [, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // WebSocket connection
   const {
