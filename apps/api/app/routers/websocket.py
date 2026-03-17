@@ -6,13 +6,14 @@ Provides real-time F1 telemetry data via WebSocket:
 - Positions (~4s intervals): driver positions on track
 - Pit stops: real-time pit stop notifications
 - Weather: track conditions updates
+- Predictions (~12s intervals): pit, position and strategy bundle
 - Heartbeat: connection health monitoring
 
 Usage:
     ws://localhost:8000/ws?session_key=9471
     
 Commands (send JSON):
-    {"command": "subscribe", "session_key": 9471, "driver_numbers": [1, 11], "channels": ["telemetry", "positions"]}
+    {"command": "subscribe", "session_key": 9471, "driver_numbers": [1, 11], "channels": ["telemetry", "positions", "predictions"]}
     {"command": "ping"}
 """
 
@@ -24,12 +25,29 @@ from typing import List, Optional, Set
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
+from app.services.openf1_client import openf1_client
 from app.services.websocket_manager import connection_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+async def _resolve_driver_numbers(session_key: int) -> List[int]:
+    """Resolve all driver numbers for a session when the client omits them."""
+    try:
+        drivers = await openf1_client.get_drivers(session_key=session_key)
+    except Exception as exc:
+        logger.warning("Could not resolve drivers for session %s: %s", session_key, exc)
+        return []
+
+    return [
+        int(driver["driver_number"])
+        for driver in drivers
+        if driver.get("driver_number") is not None
+    ]
+
+
+@router.websocket("")
 @router.websocket("/")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -56,6 +74,8 @@ async def websocket_endpoint(
             {"type": "pit_stop", "data": {...}, "timestamp": ...}
         weather: Track conditions (~60s)
             {"type": "weather", "data": {...}, "timestamp": ...}
+        predictions: Live prediction bundle (~12s)
+            {"type": "predictions", "data": {...}, "timestamp": ...}
         heartbeat: Connection health (~30s)
             {"type": "heartbeat", "timestamp": ...}
         pong: Response to ping
@@ -67,10 +87,16 @@ async def websocket_endpoint(
     
     # Auto-subscribe if session_key provided
     if session_key:
-        connection_manager.update_subscription(websocket, session_key=session_key)
+        driver_numbers = await _resolve_driver_numbers(session_key)
+        connection_manager.update_subscription(
+            websocket,
+            session_key=session_key,
+            driver_numbers=driver_numbers,
+        )
         await websocket.send_json({
             "type": "subscribed",
             "session_key": session_key,
+            "driver_numbers": driver_numbers,
             "channels": list(connection_manager.active_connections[websocket].channels),
         })
     
@@ -96,6 +122,13 @@ async def websocket_endpoint(
                     new_session_key = message.get("session_key")
                     driver_numbers = message.get("driver_numbers", [])
                     channels = message.get("channels", ["telemetry", "positions", "pit_stop", "weather"])
+                    current_subscription = connection_manager.active_connections.get(websocket)
+                    effective_session_key = (
+                        new_session_key
+                        or (current_subscription.session_key if current_subscription else None)
+                    )
+                    if effective_session_key and not driver_numbers:
+                        driver_numbers = await _resolve_driver_numbers(effective_session_key)
                     
                     connection_manager.update_subscription(
                         websocket,

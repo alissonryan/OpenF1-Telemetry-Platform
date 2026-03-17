@@ -2,13 +2,16 @@
 
 import { motion } from 'framer-motion';
 import Image from 'next/image';
+import { getDriverDisplayName } from '@/lib/driver';
 import { cn } from '@/lib/utils';
 
 interface SimpleDriver {
   driver_number: number;
   name_acronym: string;
-  first_name: string;
-  last_name: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  broadcast_name?: string;
   team_name: string;
   team_colour: string;
   country_code: string;
@@ -42,6 +45,7 @@ export default function SimpleDriverCard({
   onToggle,
 }: SimpleDriverCardProps) {
   const teamColor = teamColors[driver.team_name] || `#${driver.team_colour}` || '#666666';
+  const driverName = getDriverDisplayName(driver);
 
   return (
     <motion.div
@@ -55,7 +59,7 @@ export default function SimpleDriverCard({
       )}
       role="button"
       tabIndex={0}
-      aria-label={`Driver ${driver.first_name} ${driver.last_name}`}
+      aria-label={`Driver ${driverName}`}
       onKeyDown={(e) => e.key === 'Enter' && onToggle?.()}
     >
       {/* Team color accent */}
@@ -80,7 +84,7 @@ export default function SimpleDriverCard({
               </span>
             </div>
             <p className="truncate text-base font-semibold text-white">
-              {driver.first_name} {driver.last_name}
+              {driverName}
             </p>
             <p className="text-xs text-gray-500">{driver.team_name}</p>
           </div>
@@ -90,7 +94,7 @@ export default function SimpleDriverCard({
             <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-full bg-gray-700">
               <Image
                 src={driver.headshot_url}
-                alt={`${driver.first_name} ${driver.last_name}`}
+                alt={driverName}
                 fill
                 className="object-cover"
               />

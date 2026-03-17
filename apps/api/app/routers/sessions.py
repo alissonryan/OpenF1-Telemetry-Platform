@@ -23,6 +23,7 @@ from app.models.telemetry import WeatherResponse
 from app.services.openf1_client import (
     OpenF1APIError,
     OpenF1Client,
+    OpenF1RateLimitError,
     openf1_client,
 )
 
@@ -62,7 +63,15 @@ async def get_meetings(
     try:
         data = await openf1_client.get_meetings(year=year, meeting_key=meeting_key)
 
-        meetings = [MeetingResponse(**m) for m in data]
+        meetings = [
+            MeetingResponse(
+                **{
+                    **meeting,
+                    "official_name": meeting.get("official_name") or meeting.get("meeting_name"),
+                }
+            )
+            for meeting in data
+        ]
 
         return MeetingListResponse(
             data=meetings,
@@ -70,6 +79,12 @@ async def get_meetings(
             year=year,
         )
 
+    except OpenF1RateLimitError as e:
+        logger.error(f"OpenF1 rate limited meetings: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Failed to fetch meetings from OpenF1 API: {str(e)}",
+        )
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch meetings: {e}")
         raise HTTPException(
@@ -134,6 +149,12 @@ async def get_sessions(
             year=year,
         )
 
+    except OpenF1RateLimitError as e:
+        logger.error(f"OpenF1 rate limited sessions: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Failed to fetch sessions from OpenF1 API: {str(e)}",
+        )
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch sessions: {e}")
         raise HTTPException(
@@ -176,6 +197,12 @@ async def get_session_weather(
 
         return weather
 
+    except OpenF1RateLimitError as e:
+        logger.error(f"OpenF1 rate limited weather: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Failed to fetch weather data from OpenF1 API: {str(e)}",
+        )
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch weather: {e}")
         raise HTTPException(
@@ -218,6 +245,12 @@ async def get_session_stints(
         )
         return data
 
+    except OpenF1RateLimitError as e:
+        logger.error(f"OpenF1 rate limited stints: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Failed to fetch stint data from OpenF1 API: {str(e)}",
+        )
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch stints: {e}")
         raise HTTPException(
@@ -259,6 +292,12 @@ async def get_session_pit_stops(
         )
         return data
 
+    except OpenF1RateLimitError as e:
+        logger.error(f"OpenF1 rate limited pit stops: {e}")
+        raise HTTPException(
+            status_code=429,
+            detail=f"Failed to fetch pit stop data from OpenF1 API: {str(e)}",
+        )
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch pit stops: {e}")
         raise HTTPException(

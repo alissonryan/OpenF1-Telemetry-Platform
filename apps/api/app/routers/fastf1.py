@@ -30,6 +30,21 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _has_value(value) -> bool:
+    """Treat pandas/NumPy NaN as missing values when shaping API responses."""
+    return value is not None and value == value
+
+
+def _bool_or_default(value, default: bool = False) -> bool:
+    """Convert optional scalar values to booleans without leaking NaN."""
+    return bool(value) if _has_value(value) else default
+
+
+def _int_or_none(value) -> Optional[int]:
+    """Convert optional numeric values to ints while ignoring NaN."""
+    return int(value) if _has_value(value) else None
+
+
 @router.get(
     "/session",
     response_model=FastF1SessionInfo,
@@ -202,9 +217,9 @@ async def get_laps(
                 "sector_2": lap.get("Sector2Time").total_seconds() if hasattr(lap.get("Sector2Time"), "total_seconds") else None,
                 "sector_3": lap.get("Sector3Time").total_seconds() if hasattr(lap.get("Sector3Time"), "total_seconds") else None,
                 "tyre_compound": lap.get("Compound"),
-                "tyre_life": int(lap.get("TyreLife", 0)) if lap.get("TyreLife") is not None else None,
-                "is_personal_best": lap.get("IsPersonalBest", False),
-                "is_fresh_tyre": lap.get("FreshTyre", False),
+                "tyre_life": _int_or_none(lap.get("TyreLife")),
+                "is_personal_best": _bool_or_default(lap.get("IsPersonalBest")),
+                "is_fresh_tyre": _bool_or_default(lap.get("FreshTyre")),
             }
             laps.append(lap_data)
 

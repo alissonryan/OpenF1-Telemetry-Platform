@@ -96,6 +96,27 @@ class F1DBService:
         """Convert sqlite3.Row to dictionary."""
         return dict(row)
 
+    def _row_get(self, row: sqlite3.Row, key: str, default: Any = None) -> Any:
+        """Read an optional value from sqlite rows with dict-like semantics."""
+        return row[key] if key in row.keys() else default
+
+    def _normalize_qualifying_format(self, value: Optional[str]) -> QualifyingFormat:
+        """Map historical F1DB qualifying formats to the app's supported enum set."""
+        mapping = {
+            "AGGREGATE": QualifyingFormat.ONE_SESSION,
+            "ELIMINATION": QualifyingFormat.THREE_SESSIONS,
+            "FOUR_LAPS": QualifyingFormat.ONE_SESSION,
+            "KNOCKOUT": QualifyingFormat.THREE_SESSIONS,
+            "ONE_LAP": QualifyingFormat.ONE_SESSION,
+            "ONE_SESSION": QualifyingFormat.ONE_SESSION,
+            "SPRINT_RACE": QualifyingFormat.SPRINT_QUALIFYING,
+            "TWO_SESSION": QualifyingFormat.TWO_SESSIONS,
+            "TWO_SESSIONS": QualifyingFormat.TWO_SESSIONS,
+            "THREE_SESSIONS": QualifyingFormat.THREE_SESSIONS,
+            "SPRINT_QUALIFYING": QualifyingFormat.SPRINT_QUALIFYING,
+        }
+        return mapping.get(value or "", QualifyingFormat.ONE_SESSION)
+
     # ==================== Drivers ====================
 
     def get_driver(self, driver_id: str) -> Optional[DriverResponse]:
@@ -230,7 +251,7 @@ class F1DBService:
         if isinstance(dob, str):
             dob = date_type.fromisoformat(dob)
 
-        dod = row.get("date_of_death")
+        dod = self._row_get(row, "date_of_death")
         if dod and isinstance(dod, str):
             dod = date_type.fromisoformat(dod)
 
@@ -241,8 +262,8 @@ class F1DBService:
             last_name=row["last_name"],
             full_name=row["full_name"],
             abbreviation=row["abbreviation"],
-            permanent_number=row.get("permanent_number"),
-            gender=row.get("gender", "MALE"),
+            permanent_number=self._row_get(row, "permanent_number"),
+            gender=self._row_get(row, "gender", "MALE"),
             date_of_birth=dob,
             date_of_death=dod,
             place_of_birth=row["place_of_birth"],
@@ -442,7 +463,7 @@ class F1DBService:
             id=row["id"],
             name=row["name"],
             full_name=row["full_name"],
-            previous_names=row.get("previous_names"),
+            previous_names=self._row_get(row, "previous_names"),
             type=CircuitType(row["type"]),
             direction=CircuitDirection(row["direction"]),
             place_name=row["place_name"],
@@ -572,10 +593,12 @@ class F1DBService:
             year=row["year"],
             round=row["round"],
             date=race_date,
-            time=row.get("time"),
+            time=self._row_get(row, "time"),
             grand_prix_id=row["grand_prix_id"],
             official_name=row["official_name"],
-            qualifying_format=QualifyingFormat(row["qualifying_format"]),
+            qualifying_format=self._normalize_qualifying_format(
+                row["qualifying_format"]
+            ),
             circuit_id=row["circuit_id"],
             circuit_type=CircuitType(row["circuit_type"]),
             direction=CircuitDirection(row["direction"]),
@@ -583,8 +606,12 @@ class F1DBService:
             turns=row["turns"],
             laps=row["laps"],
             distance=float(row["distance"]),
-            drivers_championship_decider=bool(row.get("drivers_championship_decider", 0)),
-            constructors_championship_decider=bool(row.get("constructors_championship_decider", 0)),
+            drivers_championship_decider=bool(
+                self._row_get(row, "drivers_championship_decider", 0)
+            ),
+            constructors_championship_decider=bool(
+                self._row_get(row, "constructors_championship_decider", 0)
+            ),
         )
 
     # ==================== Race Results ====================
@@ -643,34 +670,40 @@ class F1DBService:
         return RaceResultResponse(
             race_id=row["race_id"],
             position_display_order=row["position_display_order"],
-            position_number=row.get("position_number"),
+            position_number=self._row_get(row, "position_number"),
             position_text=row["position_text"],
-            driver_number=row.get("driver_number"),
+            driver_number=self._row_get(row, "driver_number"),
             driver_id=row["driver_id"],
             constructor_id=row["constructor_id"],
-            engine_manufacturer_id=row.get("engine_manufacturer_id"),
-            tyre_manufacturer_id=row.get("tyre_manufacturer_id"),
-            shared_car=row.get("shared_car"),
-            laps=row.get("laps"),
-            time=row.get("time"),
-            time_millis=row.get("time_millis"),
-            time_penalty=row.get("time_penalty"),
-            time_penalty_millis=row.get("time_penalty_millis"),
-            gap=row.get("gap"),
-            gap_millis=row.get("gap_millis"),
-            gap_laps=row.get("gap_laps"),
-            interval=row.get("interval"),
-            interval_millis=row.get("interval_millis"),
-            reason_retired=row.get("reason_retired"),
-            points=float(row["points"]) if row.get("points") else None,
-            pole_position=row.get("pole_position"),
-            qualification_position_number=row.get("qualification_position_number"),
-            grid_position_number=row.get("grid_position_number"),
-            positions_gained=row.get("positions_gained"),
-            pit_stops=row.get("pit_stops"),
-            fastest_lap=row.get("fastest_lap"),
-            driver_of_the_day=row.get("driver_of_the_day"),
-            grand_slam=row.get("grand_slam"),
+            engine_manufacturer_id=self._row_get(row, "engine_manufacturer_id"),
+            tyre_manufacturer_id=self._row_get(row, "tyre_manufacturer_id"),
+            shared_car=self._row_get(row, "shared_car"),
+            laps=self._row_get(row, "laps"),
+            time=self._row_get(row, "time"),
+            time_millis=self._row_get(row, "time_millis"),
+            time_penalty=self._row_get(row, "time_penalty"),
+            time_penalty_millis=self._row_get(row, "time_penalty_millis"),
+            gap=self._row_get(row, "gap"),
+            gap_millis=self._row_get(row, "gap_millis"),
+            gap_laps=self._row_get(row, "gap_laps"),
+            interval=self._row_get(row, "interval"),
+            interval_millis=self._row_get(row, "interval_millis"),
+            reason_retired=self._row_get(row, "reason_retired"),
+            points=(
+                float(points)
+                if (points := self._row_get(row, "points")) is not None
+                else None
+            ),
+            pole_position=self._row_get(row, "pole_position"),
+            qualification_position_number=self._row_get(
+                row, "qualification_position_number"
+            ),
+            grid_position_number=self._row_get(row, "grid_position_number"),
+            positions_gained=self._row_get(row, "positions_gained"),
+            pit_stops=self._row_get(row, "pit_stops"),
+            fastest_lap=self._row_get(row, "fastest_lap"),
+            driver_of_the_day=self._row_get(row, "driver_of_the_day"),
+            grand_slam=self._row_get(row, "grand_slam"),
         )
 
     # ==================== Standings ====================
@@ -700,7 +733,7 @@ class F1DBService:
                 DriverStandingResponse(
                     year=row["year"],
                     position_display_order=row["position_display_order"],
-                    position_number=row.get("position_number"),
+                    position_number=self._row_get(row, "position_number"),
                     position_text=row["position_text"],
                     driver_id=row["driver_id"],
                     points=float(row["points"]),
@@ -734,7 +767,7 @@ class F1DBService:
                 ConstructorStandingResponse(
                     year=row["year"],
                     position_display_order=row["position_display_order"],
-                    position_number=row.get("position_number"),
+                    position_number=self._row_get(row, "position_number"),
                     position_text=row["position_text"],
                     constructor_id=row["constructor_id"],
                     points=float(row["points"]),
@@ -857,7 +890,7 @@ class F1DBService:
                 full_name=row["full_name"],
                 short_name=row["short_name"],
                 abbreviation=row["abbreviation"],
-                country_id=row.get("country_id"),
+                country_id=self._row_get(row, "country_id"),
                 total_races_held=row["total_races_held"],
             )
 

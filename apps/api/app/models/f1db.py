@@ -303,8 +303,8 @@ class RaceResponse(BaseModel):
 
     id: int = Field(..., description="Race ID")
     year: int = Field(..., description="Season year")
-    round: int = Field(..., description="Round number in season")
-    date: date = Field(..., description="Race date")
+    round_number: int = Field(..., alias="round", description="Round number in season")
+    race_date: date = Field(..., alias="date", description="Race date")
     time: Optional[str] = Field(None, description="Race start time")
     grand_prix_id: str = Field(..., description="Grand Prix ID")
     official_name: str = Field(..., description="Official race name")
@@ -320,6 +320,7 @@ class RaceResponse(BaseModel):
     constructors_championship_decider: bool = Field(default=False, description="Constructors championship decided")
 
     model_config = {
+        "populate_by_name": True,
         "json_schema_extra": {
             "examples": [
                 {

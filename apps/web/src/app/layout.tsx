@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
@@ -14,6 +14,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+const barlowCondensed = Barlow_Condensed({
+  subsets: ['latin'],
+  variable: '--font-display',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+});
+
 export const metadata: Metadata = {
   title: 'F1 Telemetry Platform',
   description: 'Real-time F1 telemetry dashboard and ML-powered predictions',
@@ -26,7 +33,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrainsMono.variable} ${barlowCondensed.variable}`}
+    >
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );

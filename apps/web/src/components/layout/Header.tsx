@@ -2,21 +2,12 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
 
 interface HeaderProps {
   onMenuClick: () => void;
 }
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/telemetry', label: 'Telemetry' },
-  { href: '/predictions', label: 'Predictions' },
-];
-
 export default function Header({ onMenuClick }: HeaderProps) {
-  const pathname = usePathname();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-gray-900/80 px-6 backdrop-blur-lg">
@@ -60,38 +51,22 @@ export default function Header({ onMenuClick }: HeaderProps) {
         </Link>
       </div>
 
-      <nav className="hidden md:flex items-center gap-1">
-        {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="relative px-4 py-2"
-            >
-              {isActive && (
-                <motion.div
-                  layoutId="activeNav"
-                  className="absolute inset-0 rounded-lg bg-f1-red/20"
-                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                />
-              )}
-              <span
-                className={cn(
-                  'relative z-10 text-sm font-medium transition-colors',
-                  isActive ? 'text-f1-red' : 'text-gray-400 hover:text-white'
-                )}
-              >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
 
-      <div className="flex items-center gap-4">
-        <div className="live-indicator" aria-label="Live session active" />
-        <motion.button
+      <div className="flex items-center gap-3">
+        <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 md:flex">
+          <span className="h-2 w-2 rounded-full bg-emerald-400" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-slate-300">
+            Live + Historical
+          </span>
+        </div>
+        <Link
+          href="/help"
+          className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:border-white/20 hover:text-white md:inline-flex"
+        >
+          Data Sources
+        </Link>
+        <Link href="/settings">
+          <motion.div
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-white transition-colors hover:bg-white/10"
@@ -116,7 +91,8 @@ export default function Header({ onMenuClick }: HeaderProps) {
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
             />
           </svg>
-        </motion.button>
+          </motion.div>
+        </Link>
       </div>
     </header>
   );

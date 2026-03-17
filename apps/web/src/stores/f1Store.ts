@@ -113,6 +113,11 @@ export const useF1Store = create<F1State>()(
     }),
     {
       name: 'f1-storage',
+      partialize: (state) => ({
+        selectedSessionKey: state.selectedSessionKey,
+        selectedMeetingKey: state.selectedMeetingKey,
+        selectedDrivers: state.selectedDrivers,
+      }),
     }
   )
 );

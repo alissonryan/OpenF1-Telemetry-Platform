@@ -122,6 +122,7 @@ class ModelStatusResponse(BaseModel):
     position_forecaster: Dict[str, Any]
     strategy_recommender: Dict[str, Any]
     models_loaded: bool
+    overall_mode: Optional[str] = None
 
 
 class FeatureImportanceResponse(BaseModel):

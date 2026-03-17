@@ -4,20 +4,34 @@
 
 :root {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 21, 21, 30;
-  --background-end-rgb: 38, 38, 47;
+  --background-start-rgb: 10, 15, 27;
+  --background-mid-rgb: 18, 27, 45;
+  --background-end-rgb: 26, 36, 60;
+  --surface-rgb: 15, 23, 42;
+  --accent-rgb: 232, 0, 32;
   --font-inter: 'Inter', system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', sans-serif;
   --font-jetbrains: 'JetBrains Mono', monospace;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-    to bottom,
-    rgb(var(--background-start-rgb)),
-    rgb(var(--background-end-rgb))
-  );
+  background:
+    radial-gradient(circle at top right, rgba(var(--accent-rgb), 0.16), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.12), transparent 26%),
+    linear-gradient(
+      180deg,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-mid-rgb)) 45%,
+      rgb(var(--background-end-rgb))
+    );
   font-family: var(--font-inter);
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(var(--accent-rgb), 0.3);
+  color: white;
 }
 
 /* Custom scrollbar */
@@ -43,7 +57,7 @@ body {
 /* F1 Racing specific styles */
 @layer components {
   .racing-gradient {
-    background: linear-gradient(135deg, #e80020 0%, #15151e 100%);
+    background: linear-gradient(135deg, #e80020 0%, rgb(var(--surface-rgb)) 100%);
   }
 
   .team-border {
@@ -52,6 +66,10 @@ body {
 
   .driver-card {
     @apply rounded-lg bg-gray-800/50 p-4 backdrop-blur-sm transition-all hover:bg-gray-800/70;
+  }
+
+  .panel-grid {
+    @apply grid gap-4 sm:grid-cols-2 xl:grid-cols-4;
   }
 
   .telemetry-value {

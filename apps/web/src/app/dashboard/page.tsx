@@ -10,7 +10,10 @@ import Leaderboard from '@/components/dashboard/Leaderboard';
 import TrackMap, { DriverPosition, DriverInfo } from '@/components/dashboard/TrackMap';
 import WeatherWidget from '@/components/dashboard/WeatherWidget';
 import ConnectionStatus, { F1ConnectionIndicator } from '@/components/ui/ConnectionStatus';
+import PageHeader from '@/components/ui/PageHeader';
 import useWebSocket from '@/hooks/useWebSocket';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface Driver {
   driver_number: number;
@@ -29,6 +32,13 @@ interface Position {
   x?: number;
   y?: number;
   z?: number;
+}
+
+interface IntervalData {
+  driver_number: number;
+  gap_to_leader?: number | null;
+  interval?: number | null;
+  date: string;
 }
 
 interface Session {
@@ -50,6 +60,7 @@ export default function DashboardPage() {
   const [sessionInfo, setSessionInfo] = useState<Session | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [intervals, setIntervals] = useState<IntervalData[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -58,6 +69,7 @@ export default function DashboardPage() {
     isConnected,
     connectionState,
     telemetry,
+    positions: livePositions,
     lastHeartbeat,
     subscribe,
     connect,
@@ -68,10 +80,26 @@ export default function DashboardPage() {
 
   // Fetch drivers when session changes (still use HTTP for initial load)
   useEffect(() => {
-    if (selectedSession) {
-      fetchDrivers();
-      fetchSessionInfo();
-    }
+    if (!selectedSession) return;
+
+    let isMounted = true;
+
+    const loadSessionContext = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([fetchDrivers(), fetchSessionInfo(), fetchIntervals()]);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadSessionContext();
+
+    return () => {
+      isMounted = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSession]);
 
@@ -94,6 +122,12 @@ export default function DashboardPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [telemetry]);
+
+  useEffect(() => {
+    if (livePositions.length > 0) {
+      setPositions(livePositions);
+    }
+  }, [livePositions]);
 
   // Convert WebSocket telemetry to chart format
   const telemetryData = telemetry;
@@ -136,9 +170,9 @@ export default function DashboardPage() {
 
   const fetchSessionInfo = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/telemetry/sessions`);
-      const data = await response.json();
-      const session = data.find((s: Session) => s.session_key === selectedSession);
+      const response = await fetch(`${API_BASE}/api/sessions?session_key=${selectedSession}`);
+      const payload = await response.json();
+      const session = (payload.data ?? []).find((item: Session) => item.session_key === selectedSession);
       setSessionInfo(session || null);
     } catch (error) {
       console.error('Failed to fetch session info:', error);
@@ -147,11 +181,12 @@ export default function DashboardPage() {
 
   const fetchDrivers = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/telemetry/drivers?session_key=${selectedSession}`);
-      const data = await response.json();
-      setDrivers(data);
+      const response = await fetch(`${API_BASE}/api/telemetry/drivers?session_key=${selectedSession}`);
+      const payload = await response.json();
+      const driverList = payload.data ?? [];
+      setDrivers(driverList);
       // Select first 3 drivers by default
-      setSelectedDrivers(data.slice(0, 3).map((d: Driver) => d.driver_number));
+      setSelectedDrivers(driverList.slice(0, 3).map((driver: Driver) => driver.driver_number));
     } catch (error) {
       console.error('Failed to fetch drivers:', error);
     }
@@ -160,7 +195,7 @@ export default function DashboardPage() {
   const fetchPositions = async () => {
     try {
       const response = await fetch(
-        `http://localhost:8000/api/telemetry/position?session_key=${selectedSession}&limit=100`
+        `${API_BASE}/api/telemetry/position?session_key=${selectedSession}&limit=100`
       );
       const data = await response.json();
       
@@ -176,6 +211,23 @@ export default function DashboardPage() {
       setPositions(Object.values(latestPositions));
     } catch (error) {
       console.error('Failed to fetch positions:', error);
+    }
+  };
+
+  const fetchIntervals = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/telemetry/intervals?session_key=${selectedSession}&limit=30`
+      );
+      const payload: IntervalData[] = await response.json();
+      const latest = new Map<number, IntervalData>();
+      payload.forEach((item) => {
+        latest.set(item.driver_number, item);
+      });
+      setIntervals(Array.from(latest.values()));
+    } catch (error) {
+      console.error('Failed to fetch intervals:', error);
+      setIntervals([]);
     }
   };
 
@@ -215,18 +267,18 @@ export default function DashboardPage() {
     <Layout>
       <div className="p-6">
         {/* Header with Connection Status */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6 flex items-center justify-between"
-        >
-          <h1 className="text-2xl font-bold text-white">F1 Telemetry Dashboard</h1>
-          <F1ConnectionIndicator 
-            isConnected={isConnected} 
-            connectionState={connectionState}
-          />
-        </motion.div>
+        <PageHeader
+          eyebrow="Race Snapshot"
+          title="F1 Telemetry Dashboard"
+          description="Compact overview of the selected session with live map, key telemetry and a position table backed by real interval data."
+          actions={
+            <F1ConnectionIndicator 
+              isConnected={isConnected} 
+              connectionState={connectionState}
+            />
+          }
+          className="mb-6"
+        />
 
         {/* Session Selector */}
         <motion.div
@@ -367,9 +419,9 @@ export default function DashboardPage() {
                   drivers={drivers}
                 />
                 <TelemetryChart
-                  title="Brake"
+                  title="Gear"
                   data={telemetryData}
-                  dataKey="brake"
+                  dataKey="gear"
                   color="#ff8700"
                   selectedDrivers={selectedDrivers}
                   drivers={drivers}
@@ -391,7 +443,7 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
             >
-              <Leaderboard positions={positions} drivers={drivers} />
+              <Leaderboard positions={positions} drivers={drivers} intervals={intervals} />
             </motion.div>
           </>
         )}

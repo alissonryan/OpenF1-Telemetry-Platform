@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.services.weather_service import get_weather_service
 
 
-router = APIRouter(prefix="/weather", tags=["weather"])
+router = APIRouter(tags=["weather"])
 
 
 class WeatherResponse(BaseModel):

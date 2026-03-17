@@ -27,11 +27,18 @@ from app.models.telemetry import (
 )
 from app.services.openf1_client import (
     OpenF1APIError,
+    OpenF1RateLimitError,
     openf1_client,
 )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _raise_openf1_http_error(detail: str, exc: OpenF1APIError) -> None:
+    """Map upstream OpenF1 failures to the correct HTTP response."""
+    status_code = 429 if isinstance(exc, OpenF1RateLimitError) else 503
+    raise HTTPException(status_code=status_code, detail=f"{detail}: {str(exc)}")
 
 
 @router.get(
@@ -108,10 +115,7 @@ async def get_car_data(
 
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch car data: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch telemetry from OpenF1 API: {str(e)}",
-        )
+        _raise_openf1_http_error("Failed to fetch telemetry from OpenF1 API", e)
 
 
 @router.get(
@@ -171,10 +175,7 @@ async def get_position(
 
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch position data: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch position data from OpenF1 API: {str(e)}",
-        )
+        _raise_openf1_http_error("Failed to fetch position data from OpenF1 API", e)
 
 
 @router.get(
@@ -257,10 +258,7 @@ async def get_laps(
 
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch lap data: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch lap data from OpenF1 API: {str(e)}",
-        )
+        _raise_openf1_http_error("Failed to fetch lap data from OpenF1 API", e)
 
 
 @router.get(
@@ -313,10 +311,7 @@ async def get_drivers(
 
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch driver data: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch driver data from OpenF1 API: {str(e)}",
-        )
+        _raise_openf1_http_error("Failed to fetch driver data from OpenF1 API", e)
 
 
 @router.get(
@@ -365,10 +360,7 @@ async def get_intervals(
 
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch interval data: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch interval data from OpenF1 API: {str(e)}",
-        )
+        _raise_openf1_http_error("Failed to fetch interval data from OpenF1 API", e)
 
 
 @router.get(
@@ -435,7 +427,4 @@ async def get_fastest_lap(
 
     except OpenF1APIError as e:
         logger.error(f"Failed to fetch fastest lap: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Failed to fetch lap data from OpenF1 API: {str(e)}",
-        )
+        _raise_openf1_http_error("Failed to fetch lap data from OpenF1 API", e)

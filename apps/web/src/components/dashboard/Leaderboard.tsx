@@ -1,12 +1,15 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { getDriverDisplayName } from '@/lib/driver';
 
 interface Driver {
   driver_number: number;
   name_acronym: string;
-  first_name: string;
-  last_name: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  broadcast_name?: string;
   team_name: string;
   team_colour: string;
 }
@@ -17,12 +20,23 @@ interface Position {
   driver_number: number;
 }
 
+interface IntervalData {
+  driver_number: number;
+  gap_to_leader?: number | null;
+  interval?: number | null;
+}
+
 interface LeaderboardProps {
   positions: Position[];
   drivers: Driver[];
+  intervals?: IntervalData[];
 }
 
-export default function Leaderboard({ positions, drivers }: LeaderboardProps) {
+export default function Leaderboard({
+  positions,
+  drivers,
+  intervals = [],
+}: LeaderboardProps) {
   // Sort positions and get latest position for each driver
   const leaderboard = positions
     .sort((a, b) => a.position - b.position)
@@ -44,6 +58,11 @@ export default function Leaderboard({ positions, drivers }: LeaderboardProps) {
     if (position === 3) return 'text-amber-600';
     return 'text-white';
   };
+
+  const latestIntervals = intervals.reduce<Record<number, IntervalData>>((acc, item) => {
+    acc[item.driver_number] = item;
+    return acc;
+  }, {});
 
   if (leaderboard.length === 0) {
     return null;
@@ -85,12 +104,18 @@ export default function Leaderboard({ positions, drivers }: LeaderboardProps) {
                         style={{ backgroundColor: `#${driver.team_colour}` }}
                       />
                       <span className="font-semibold text-white">{driver.name_acronym}</span>
-                      <span className="text-gray-400">{driver.first_name} {driver.last_name}</span>
+                      <span className="text-gray-400">{getDriverDisplayName(driver)}</span>
                     </div>
                   </td>
                   <td className="py-3 pr-4 text-gray-400">{driver.team_name}</td>
                   <td className="py-3 text-gray-400">
-                    {pos.position === 1 ? 'LEADER' : `+${Math.random() * 10}`}
+                    {pos.position === 1
+                      ? 'LEADER'
+                      : latestIntervals[pos.driver_number]?.gap_to_leader != null
+                        ? `+${latestIntervals[pos.driver_number].gap_to_leader?.toFixed(3)}s`
+                        : latestIntervals[pos.driver_number]?.interval != null
+                          ? `+${latestIntervals[pos.driver_number].interval?.toFixed(3)}s`
+                          : 'N/A'}
                   </td>
                 </motion.tr>
               );

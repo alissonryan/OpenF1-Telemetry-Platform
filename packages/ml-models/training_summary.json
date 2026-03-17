@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-03-17T11:35:51.947575",
+  "models": {
+    "pit_predictor": {
+      "status": "failed",
+      "error": "\"['gap_to_ahead', 'lap_time_trend'] not in index\""
+    },
+    "position_forecaster": {
+      "status": "success",
+      "metrics": {
+        "train_r2": 0.98634934425354,
+        "test_r2": 0.8848564028739929,
+        "mae": 1.6959834098815918
+      }
+    },
+    "strategy_recommender": {
+      "status": "success",
+      "metrics": {
+        "method": "rule_based"
+      }
+    }
+  }
+}

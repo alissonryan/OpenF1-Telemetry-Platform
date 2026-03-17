@@ -1,325 +1,394 @@
 #!/usr/bin/env python3
 """
-Test script for F1 Telemetry API integration.
-
-This script tests the OpenF1 and Fast-F1 API integrations.
-
-Usage:
-    cd apps/api
-    source .venv/bin/activate
-    python tests/test_api_integration.py
+Integration tests for the OpenF1 and Fast-F1 services.
 """
 
-import asyncio
 import logging
 import sys
 from pathlib import Path
 
-# Add the app to path
+import pytest
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.services.openf1_client import openf1_client
+from app.main import app
+from app.services.openf1_client import OpenF1APIError, openf1_client
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
+STABLE_SESSION_KEY = 9472
 
-async def test_openf1_meetings():
-    """Test fetching meetings from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Meetings ===")
 
+def _skip_if_rate_limited(exc: OpenF1APIError) -> None:
+    """Skip tests when the free OpenF1 tier rate limits the suite."""
+    if "429" in str(exc) or "Rate limit exceeded" in str(exc):
+        pytest.skip(f"OpenF1 rate limited this integration test: {exc}")
+
+
+def _skip_if_rate_limited_response(response) -> None:
+    """Skip HTTP-level integration tests when the upstream free tier throttles them."""
+    if response.status_code in {429, 503} and "Rate limit" in response.text:
+        pytest.skip(f"OpenF1 rate limited this integration test: {response.text}")
+
+
+@pytest.fixture
+def session_key() -> int:
+    """Use a known 2024 race session instead of relying on API ordering."""
+    return STABLE_SESSION_KEY
+
+
+@pytest.fixture
+async def api_client() -> AsyncClient:
+    """Return an async test client bound to the FastAPI app."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+
+async def test_openf1_meetings() -> None:
+    """Meetings endpoint should return 2024 race weekends."""
     try:
         meetings = await openf1_client.get_meetings(year=2024)
-        logger.info(f"✅ Found {len(meetings)} meetings for 2024")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if meetings:
-            logger.info(f"   First meeting: {meetings[0].get('meeting_name', 'Unknown')}")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch meetings: {e}")
-        return False
+    assert isinstance(meetings, list)
+    assert meetings, "Expected at least one meeting for 2024"
+    assert meetings[0].get("meeting_name")
 
 
-async def test_openf1_sessions():
-    """Test fetching sessions from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Sessions ===")
-
+async def test_openf1_sessions(session_key: int) -> None:
+    """Sessions endpoint should return a usable session key."""
     try:
-        # Get sessions for 2024
         sessions = await openf1_client.get_sessions(year=2024)
-        logger.info(f"✅ Found {len(sessions)} sessions for 2024")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if sessions:
-            # Get a session key for further tests
-            session_key = sessions[0].get("session_key")
-            logger.info(f"   First session: {sessions[0].get('session_name', 'Unknown')} (key: {session_key})")
-            return session_key
-
-        return None
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch sessions: {e}")
-        return None
+    assert isinstance(sessions, list)
+    assert sessions, "Expected at least one session for 2024"
+    assert any(session.get("session_key") == session_key for session in sessions)
 
 
-async def test_openf1_drivers(session_key: int):
-    """Test fetching drivers from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Drivers ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping driver test")
-        return False
-
+async def test_openf1_drivers(session_key: int) -> None:
+    """Drivers endpoint should return at least one driver for the session."""
     try:
         drivers = await openf1_client.get_drivers(session_key=session_key)
-        logger.info(f"✅ Found {len(drivers)} drivers for session {session_key}")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        for driver in drivers[:3]:
-            logger.info(f"   Driver: #{driver.get('driver_number')} {driver.get('name_acronym')} - {driver.get('team_name')}")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch drivers: {e}")
-        return False
+    assert isinstance(drivers, list)
+    assert drivers, f"Expected drivers for session {session_key}"
+    assert drivers[0].get("driver_number") is not None
 
 
-async def test_openf1_car_data(session_key: int):
-    """Test fetching car telemetry data from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Car Data ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping car data test")
-        return False
-
+async def test_openf1_car_data(session_key: int) -> None:
+    """Car data endpoint should return telemetry or a documented API limit."""
     try:
-        # Get telemetry for a specific driver with date filter to limit data
-        # Note: OpenF1 API returns 422 if requesting too much data at once
         data = await openf1_client.get_car_data(
             session_key=session_key,
-            driver_number=1,  # Verstappen
-            date="2024-02-21T12:00:00+00:00",  # Limit to specific time window
+            driver_number=1,
+            date="2024-02-21T12:00:00+00:00",
         )
+    except OpenF1APIError as exc:
+        message = str(exc)
+        if "422" in message or "429" in message or "Rate limit exceeded" in message:
+            pytest.skip(f"OpenF1 limited this telemetry query: {message}")
+        raise
 
-        logger.info(f"✅ Found {len(data)} car data points for driver #1")
-
-        if data:
-            sample = data[0]
-            logger.info(f"   Sample: Speed={sample.get('speed')} km/h, "
-                       f"Throttle={sample.get('throttle')}%, "
-                       f"Gear={sample.get('n_gear')}")
-
-        return True
-    except Exception as e:
-        # 422 error is expected when requesting too much data
-        error_msg = str(e)
-        if "422" in error_msg or "too much data" in error_msg.lower():
-            logger.warning(f"⚠️ Car data test limited by API (422 - too much data). This is expected behavior.")
-            logger.info("   💡 Tip: Use date filters to limit data requests")
-            return True  # Consider this a pass since the API is working
-        logger.error(f"❌ Failed to fetch car data: {e}")
-        return False
+    assert isinstance(data, list)
 
 
-async def test_openf1_laps(session_key: int):
-    """Test fetching lap data from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Laps ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping laps test")
-        return False
-
+async def test_openf1_laps(session_key: int) -> None:
+    """Laps endpoint should return lap timing data for the session."""
     try:
         laps = await openf1_client.get_laps(session_key=session_key)
-        logger.info(f"✅ Found {len(laps)} lap records for session {session_key}")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if laps:
-            # Find fastest lap
-            valid_laps = [l for l in laps if l.get("lap_duration")]
-            if valid_laps:
-                fastest = min(valid_laps, key=lambda x: x.get("lap_duration", float("inf")))
-                logger.info(f"   Fastest lap: Driver #{fastest.get('driver_number')} - "
-                           f"Lap {fastest.get('lap_number')} - "
-                           f"{fastest.get('lap_duration'):.3f}s")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch laps: {e}")
-        return False
+    assert isinstance(laps, list)
+    assert laps, f"Expected lap data for session {session_key}"
+    assert laps[0].get("lap_number") is not None
 
 
-async def test_openf1_weather(session_key: int):
-    """Test fetching weather data from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Weather ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping weather test")
-        return False
-
+async def test_openf1_weather(session_key: int) -> None:
+    """Weather endpoint should return at least one weather sample."""
     try:
         weather = await openf1_client.get_weather(session_key=session_key)
-        logger.info(f"✅ Found {len(weather)} weather data points")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if weather:
-            sample = weather[0]
-            logger.info(f"   Sample: Air={sample.get('air_temperature')}°C, "
-                       f"Track={sample.get('track_temperature')}°C, "
-                       f"Humidity={sample.get('humidity')}%")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch weather: {e}")
-        return False
+    assert isinstance(weather, list)
+    assert weather, f"Expected weather data for session {session_key}"
 
 
-async def test_openf1_positions(session_key: int):
-    """Test fetching position data from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Positions ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping positions test")
-        return False
-
+async def test_openf1_positions(session_key: int) -> None:
+    """Positions endpoint should return position data for a driver."""
     try:
         positions = await openf1_client.get_positions(
             session_key=session_key,
             driver_number=1,
         )
-        logger.info(f"✅ Found {len(positions)} position data points for driver #1")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if positions:
-            sample = positions[0]
-            x = sample.get('x')
-            y = sample.get('y')
-            pos = sample.get('position')
-            
-            x_str = f"{x:.1f}" if x is not None else "N/A"
-            y_str = f"{y:.1f}" if y is not None else "N/A"
-            
-            logger.info(f"   Sample: Position={pos}, X={x_str}, Y={y_str}")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch positions: {e}")
-        return False
+    assert isinstance(positions, list)
+    assert positions, f"Expected position data for session {session_key}"
+    assert positions[0].get("position") is not None
 
 
-async def test_openf1_stints(session_key: int):
-    """Test fetching stint data from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Stints ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping stints test")
-        return False
-
+async def test_openf1_stints(session_key: int) -> None:
+    """Stints endpoint should return tyre stint data."""
     try:
         stints = await openf1_client.get_stints(session_key=session_key)
-        logger.info(f"✅ Found {len(stints)} stint records")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if stints:
-            sample = stints[0]
-            logger.info(f"   Sample: Driver #{sample.get('driver_number')}, "
-                       f"Stint {sample.get('stint_number')}, "
-                       f"Compound: {sample.get('compound')}")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch stints: {e}")
-        return False
+    assert isinstance(stints, list)
+    assert stints, f"Expected stint data for session {session_key}"
 
 
-async def test_openf1_pit(session_key: int):
-    """Test fetching pit stop data from OpenF1 API."""
-    logger.info("=== Testing OpenF1 Pit Stops ===")
-
-    if not session_key:
-        logger.warning("⚠️ No session key available, skipping pit test")
-        return False
-
+async def test_openf1_pit(session_key: int) -> None:
+    """Pit endpoint should return pit stop data when available."""
     try:
         pits = await openf1_client.get_pit(session_key=session_key)
-        logger.info(f"✅ Found {len(pits)} pit stop records")
+    except OpenF1APIError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
-        if pits:
-            sample = pits[0]
-            logger.info(f"   Sample: Driver #{sample.get('driver_number')}, "
-                       f"Lap {sample.get('lap_number')}, "
-                       f"Duration: {sample.get('pit_duration')}s")
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch pit data: {e}")
-        return False
+    assert isinstance(pits, list)
 
 
-def test_fastf1_service():
-    """Test Fast-F1 service initialization and basic functionality."""
-    logger.info("=== Testing Fast-F1 Service ===")
+async def test_prediction_pit_batch_uses_live_session_data(
+    api_client: AsyncClient,
+    session_key: int,
+) -> None:
+    """Pit-stop predictions should be generated from a live session snapshot."""
+    response = await api_client.get(
+        "/api/predictions/pit-stop/batch",
+        params={"session_key": session_key},
+    )
 
-    try:
-        from app.services.fastf1_service import fastf1_service
+    if response.status_code == 429:
+        pytest.skip(f"OpenF1 rate limited this integration test: {response.text}")
 
-        logger.info("✅ Fast-F1 service initialized")
-        logger.info(f"   Cache enabled: {fastf1_service._cache_enabled}")
-
-        # Note: We don't load actual sessions here as it can be slow
-        # The service is ready to use
-
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize Fast-F1 service: {e}")
-        return False
+    assert response.status_code == 200
+    data = response.json()
+    assert data, f"Expected pit predictions for session {session_key}"
+    assert len({prediction["driver_number"] for prediction in data}) == len(data)
+    assert all("probability" in prediction for prediction in data)
+    assert all(isinstance(prediction["reasons"], list) for prediction in data)
 
 
-async def run_all_tests():
-    """Run all integration tests."""
-    logger.info("=" * 60)
-    logger.info("F1 Telemetry API Integration Tests")
-    logger.info("=" * 60)
+async def test_prediction_position_forecast_includes_driver_metadata(
+    api_client: AsyncClient,
+    session_key: int,
+) -> None:
+    """Position forecast should expose live driver/team metadata."""
+    response = await api_client.get(
+        "/api/predictions/position-forecast",
+        params={"session_key": session_key, "laps_ahead": 5},
+    )
 
-    results = []
+    if response.status_code == 429:
+        pytest.skip(f"OpenF1 rate limited this integration test: {response.text}")
 
-    # Test OpenF1 endpoints
-    results.append(("OpenF1 Meetings", await test_openf1_meetings()))
+    assert response.status_code == 200
+    data = response.json()
+    assert data["session_key"] == session_key
+    assert data["predictions"], f"Expected forecast predictions for session {session_key}"
+    first_prediction = data["predictions"][0]
+    assert first_prediction["driver_name"]
+    assert first_prediction["team_name"]
 
-    session_key = await test_openf1_sessions()
-    results.append(("OpenF1 Sessions", session_key is not None))
 
-    if session_key:
-        results.append(("OpenF1 Drivers", await test_openf1_drivers(session_key)))
-        results.append(("OpenF1 Car Data", await test_openf1_car_data(session_key)))
-        results.append(("OpenF1 Laps", await test_openf1_laps(session_key)))
-        results.append(("OpenF1 Weather", await test_openf1_weather(session_key)))
-        results.append(("OpenF1 Positions", await test_openf1_positions(session_key)))
-        results.append(("OpenF1 Stints", await test_openf1_stints(session_key)))
-        results.append(("OpenF1 Pit Stops", await test_openf1_pit(session_key)))
+async def test_prediction_strategy_batch_uses_live_compounds(
+    api_client: AsyncClient,
+    session_key: int,
+) -> None:
+    """Strategy recommendations should reflect compounds observed in session data."""
+    response = await api_client.get(
+        "/api/predictions/strategy/batch",
+        params={"session_key": session_key},
+    )
 
-    # Test Fast-F1
-    results.append(("Fast-F1 Service", test_fastf1_service()))
+    if response.status_code == 429:
+        pytest.skip(f"OpenF1 rate limited this integration test: {response.text}")
 
-    # Summary
-    logger.info("=" * 60)
-    logger.info("Test Summary")
-    logger.info("=" * 60)
+    assert response.status_code == 200
+    data = response.json()
+    assert data, f"Expected strategy recommendations for session {session_key}"
+    assert all(strategy["current_compound"] for strategy in data)
+    assert all(strategy["risk_level"] in {"low", "medium", "high"} for strategy in data)
 
-    passed = sum(1 for _, result in results if result)
-    total = len(results)
 
-    for name, result in results:
-        status = "✅ PASS" if result else "❌ FAIL"
-        logger.info(f"  {status}: {name}")
+async def test_prediction_pit_batch_rejects_invalid_driver_numbers(
+    api_client: AsyncClient,
+    session_key: int,
+) -> None:
+    """Batch pit endpoint should surface invalid driver filters as client errors."""
+    response = await api_client.get(
+        "/api/predictions/pit-stop/batch",
+        params={"session_key": session_key, "driver_numbers": "abc"},
+    )
 
-    logger.info(f"\nTotal: {passed}/{total} tests passed")
+    assert response.status_code == 422
 
-    # Close the HTTP client
-    await openf1_client.close()
 
-    return passed == total
+async def test_sessions_meetings_endpoint_maps_official_name(
+    api_client: AsyncClient,
+) -> None:
+    """Meetings route should backfill official_name from OpenF1 payloads."""
+    response = await api_client.get("/api/sessions/meetings", params={"year": 2024})
+
+    _skip_if_rate_limited_response(response)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]
+    assert payload["data"][0]["official_name"]
+
+
+async def test_sessions_endpoint_accepts_openf1_practice_type(
+    api_client: AsyncClient,
+) -> None:
+    """Sessions route should accept OpenF1's generic Practice session_type."""
+    response = await api_client.get("/api/sessions/", params={"meeting_key": 1229})
+
+    _skip_if_rate_limited_response(response)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]
+    assert any(session["session_type"] == "Practice" for session in payload["data"])
+
+
+async def test_f1db_drivers_endpoint_returns_paginated_drivers(
+    api_client: AsyncClient,
+) -> None:
+    """F1DB drivers endpoint should return a stable paginated payload."""
+    response = await api_client.get(
+        "/api/f1db/drivers",
+        params={"season": 2024, "page_size": 5},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= len(payload["data"])
+    assert payload["page"] == 1
+    assert payload["page_size"] == 5
+    assert payload["data"]
+    assert payload["data"][0]["id"]
+    assert payload["data"][0]["full_name"]
+
+
+async def test_f1db_driver_standings_endpoint_returns_records(
+    api_client: AsyncClient,
+) -> None:
+    """F1DB driver standings endpoint should expose season standings."""
+    response = await api_client.get("/api/f1db/seasons/2024/standings/drivers")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["year"] == 2024
+    assert payload["total"] == len(payload["data"])
+    assert payload["data"]
+    assert payload["data"][0]["driver_id"]
+
+
+async def test_f1db_races_endpoint_accepts_circuit_filter(
+    api_client: AsyncClient,
+) -> None:
+    """F1DB races endpoint should return circuit-filtered results without enum errors."""
+    response = await api_client.get(
+        "/api/f1db/races",
+        params={"circuit_id": "avus", "page_size": 5},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= len(payload["data"])
+    assert payload["data"]
+    assert all(race["circuit_id"] == "avus" for race in payload["data"])
+
+
+async def test_fastf1_session_endpoint_returns_session_metadata(
+    api_client: AsyncClient,
+) -> None:
+    """FastF1 session endpoint should derive session metadata from loaded session info."""
+    response = await api_client.get(
+        "/api/fastf1/session",
+        params={"year": 2026, "grand_prix": 1, "session_type": "R"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["grand_prix"]
+    assert payload["session_type"] == "Race"
+    assert payload["session_name"] == "Race"
+    assert payload["drivers"]
+
+
+async def test_fastf1_laps_endpoint_returns_lap_payload(
+    api_client: AsyncClient,
+) -> None:
+    """FastF1 laps endpoint should return lap rows once session metadata resolves."""
+    response = await api_client.get(
+        "/api/fastf1/laps",
+        params={"year": 2026, "grand_prix": 1, "session_type": "R"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session_info"]["session_type"] == "Race"
+    assert payload["total_laps"] == len(payload["laps"])
+
+
+async def test_fastf1_weather_endpoint_returns_summary(
+    api_client: AsyncClient,
+) -> None:
+    """FastF1 weather endpoint should return a weather summary for the session."""
+    response = await api_client.get(
+        "/api/fastf1/weather",
+        params={"year": 2026, "grand_prix": 1, "session_type": "R"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["session_info"]["session_type"] == "Race"
+    assert "air_temp" in payload["summary"]
+    assert "avg" in payload["summary"]["air_temp"]
+
+
+def test_fastf1_service() -> None:
+    """Fast-F1 service should initialize without raising exceptions."""
+    from app.services.fastf1_service import fastf1_service
+
+    assert fastf1_service is not None
+    assert isinstance(fastf1_service._cache_enabled, bool)
+
+
+def test_websocket_endpoint_accepts_path_without_trailing_slash() -> None:
+    """WebSocket endpoint should accept the `/ws` path used by the frontend."""
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as websocket:
+            websocket.send_json({"command": "ping"})
+            message = websocket.receive_json()
+
+    assert message["type"] == "pong"
 
 
 if __name__ == "__main__":
-    success = asyncio.run(run_all_tests())
-    sys.exit(0 if success else 1)
+    raise SystemExit(pytest.main([__file__]))

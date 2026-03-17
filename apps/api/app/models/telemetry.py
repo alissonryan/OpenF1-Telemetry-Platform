@@ -206,6 +206,8 @@ class DriverResponse(BaseModel):
     driver_number: int = Field(..., ge=1, le=99)
     broadcast_name: str = Field(..., description="Name used in broadcasts")
     full_name: str = Field(..., description="Driver's full name")
+    first_name: Optional[str] = Field(None, description="Driver's first name")
+    last_name: Optional[str] = Field(None, description="Driver's last name")
     name_acronym: str = Field(
         ...,
         min_length=3,
@@ -233,6 +235,8 @@ class DriverResponse(BaseModel):
                     "driver_number": 1,
                     "broadcast_name": "M VERSTAPPEN",
                     "full_name": "Max Verstappen",
+                    "first_name": "Max",
+                    "last_name": "Verstappen",
                     "name_acronym": "VER",
                     "team_name": "Red Bull Racing",
                     "team_colour": "3671C6",

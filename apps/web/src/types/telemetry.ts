@@ -39,6 +39,8 @@ export interface Driver {
   driver_number: number;
   broadcast_name: string;
   full_name: string;
+  first_name?: string;
+  last_name?: string;
   name_acronym: string;
   team_name: string;
   team_colour: string;

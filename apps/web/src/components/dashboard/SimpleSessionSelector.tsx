@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface SimpleSessionSelectorProps {
   onSelect: (sessionKey: number) => void;
   className?: string;
@@ -24,6 +26,19 @@ interface Session {
   date_start: string;
 }
 
+async function getResponseError(response: Response): Promise<string> {
+  try {
+    const payload = await response.json();
+    if (typeof payload?.detail === 'string') {
+      return payload.detail;
+    }
+  } catch {
+    // Ignore JSON parsing failures and fall back to the status code.
+  }
+
+  return `HTTP ${response.status}`;
+}
+
 export default function SimpleSessionSelector({ onSelect, className }: SimpleSessionSelectorProps) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -32,6 +47,8 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
   const [isLoading, setIsLoading] = useState(false);
   const [isMeetingOpen, setIsMeetingOpen] = useState(false);
   const [isSessionOpen, setIsSessionOpen] = useState(false);
+  const [meetingError, setMeetingError] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Fetch meetings on mount
   useEffect(() => {
@@ -47,11 +64,36 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
 
   const fetchMeetings = async () => {
     setIsLoading(true);
+    setMeetingError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/sessions/meetings?year=2024');
-      const data = await response.json();
-      setMeetings(data.slice(0, 10)); // Limit to recent meetings
+      const currentYear = new Date().getFullYear();
+      const candidateYears = Array.from(
+        new Set([currentYear, currentYear - 1, currentYear - 2, 2024])
+      ).filter((year) => year >= 2023);
+
+      let loadedMeetings: Meeting[] = [];
+
+      for (const year of candidateYears) {
+        const response = await fetch(`${API_BASE}/api/sessions/meetings?year=${year}`);
+        if (!response.ok) {
+          if (response.status === 429 || response.status === 503) {
+            throw new Error(await getResponseError(response));
+          }
+          continue;
+        }
+
+        const payload = await response.json();
+        const meetingsForYear = payload.data ?? [];
+        if (meetingsForYear.length > 0) {
+          loadedMeetings = meetingsForYear;
+          break;
+        }
+      }
+
+      setMeetings(loadedMeetings);
     } catch (error) {
+      setMeetings([]);
+      setMeetingError(error instanceof Error ? error.message : 'Failed to fetch meetings');
       console.error('Failed to fetch meetings:', error);
     } finally {
       setIsLoading(false);
@@ -59,11 +101,17 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
   };
 
   const fetchSessions = async (meetingKey: number) => {
+    setSessionError(null);
     try {
-      const response = await fetch(`http://localhost:8000/api/sessions/sessions?meeting_key=${meetingKey}`);
-      const data = await response.json();
-      setSessions(data);
+      const response = await fetch(`${API_BASE}/api/sessions/?meeting_key=${meetingKey}`);
+      if (!response.ok) {
+        throw new Error(await getResponseError(response));
+      }
+      const payload = await response.json();
+      setSessions(payload.data ?? []);
     } catch (error) {
+      setSessions([]);
+      setSessionError(error instanceof Error ? error.message : 'Failed to fetch sessions');
       console.error('Failed to fetch sessions:', error);
     }
   };
@@ -150,7 +198,12 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
                     </p>
                   </button>
                 ))}
-                {meetings.length === 0 && (
+                {meetingError && (
+                  <p className="px-3 py-4 text-center text-sm text-red-400">
+                    {meetingError}
+                  </p>
+                )}
+                {meetings.length === 0 && !meetingError && (
                   <p className="px-3 py-4 text-center text-sm text-gray-400">
                     No meetings available
                   </p>
@@ -228,7 +281,12 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
                     </div>
                   </button>
                 ))}
-                {sessions.length === 0 && (
+                {sessionError && (
+                  <p className="px-3 py-4 text-center text-sm text-red-400">
+                    {sessionError}
+                  </p>
+                )}
+                {sessions.length === 0 && !sessionError && (
                   <p className="px-3 py-4 text-center text-sm text-gray-400">
                     No sessions available
                   </p>

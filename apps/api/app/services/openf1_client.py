@@ -6,7 +6,10 @@ Rate Limit: 3 requests/second (free tier)
 """
 
 import asyncio
+import copy
+import json
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -55,17 +58,25 @@ class RateLimiter:
 
     def __init__(self, calls_per_second: float = 2.5):
         self.min_interval = 1.0 / calls_per_second
-        self.last_called = 0.0
-        self.lock = asyncio.Lock()
+        self._last_called: Dict[int, float] = {}
+        self._locks: Dict[int, asyncio.Lock] = {}
 
     async def acquire(self):
         """Wait until we can make the next request."""
-        async with self.lock:
-            now = asyncio.get_event_loop().time()
-            elapsed = now - self.last_called
+        loop = asyncio.get_running_loop()
+        loop_id = id(loop)
+        lock = self._locks.get(loop_id)
+
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[loop_id] = lock
+
+        async with lock:
+            now = loop.time()
+            elapsed = now - self._last_called.get(loop_id, 0.0)
             if elapsed < self.min_interval:
                 await asyncio.sleep(self.min_interval - elapsed)
-            self.last_called = asyncio.get_event_loop().time()
+            self._last_called[loop_id] = loop.time()
 
 
 # Global rate limiter instance
@@ -79,22 +90,88 @@ class OpenF1Client:
         self.base_url = settings.openf1_base_url
         self.timeout = 30.0
         self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop_id: Optional[int] = None
+        self._response_cache: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
+        self._inflight_requests: Dict[tuple[int, str], asyncio.Task[List[Dict[str, Any]]]] = {}
+
+    def _cache_policy_for(
+        self,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> tuple[int, int]:
+        """Return fresh/stale TTLs for a given OpenF1 endpoint."""
+        policies: Dict[str, tuple[int, int]] = {
+            "meetings": (1800, 86400),
+            "sessions": (900, 3600),
+            "drivers": (300, 1800),
+            "weather": (30, 300),
+            "car_data": (2, 10),
+            "position": (3, 15),
+            "pit": (10, 120),
+            "stints": (15, 180),
+            "laps": (5, 60),
+            "intervals": (4, 30),
+            "race_control": (10, 120),
+            "team_radio": (10, 120),
+        }
+        return policies.get(endpoint, (0, 0))
+
+    def _cache_key(
+        self,
+        endpoint: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Build a stable cache key from endpoint and params."""
+        normalized_params = {
+            key: value
+            for key, value in sorted((params or {}).items())
+            if value is not None
+        }
+        return f"{endpoint}:{json.dumps(normalized_params, sort_keys=True, default=str, separators=(',', ':'))}"
+
+    def _clone_payload(self, payload: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Prevent callers from mutating cached payloads in place."""
+        return copy.deepcopy(payload)
+
+    def _read_cache(
+        self,
+        cache_key: str,
+        *,
+        max_age_seconds: int,
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Read a cached payload if it is still within the allowed age."""
+        if max_age_seconds <= 0:
+            return None
+
+        cached = self._response_cache.get(cache_key)
+        if not cached:
+            return None
+
+        cached_at, payload = cached
+        if time.monotonic() - cached_at > max_age_seconds:
+            return None
+
+        return self._clone_payload(payload)
 
     async def __aenter__(self) -> "OpenF1Client":
         """Async context manager entry."""
-        self._client = httpx.AsyncClient(timeout=self.timeout)
+        await self._get_client()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None
+        await self.close()
 
-    def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create an HTTP client bound to the current event loop."""
+        current_loop_id = id(asyncio.get_running_loop())
+
+        if self._client is not None and self._client_loop_id != current_loop_id:
+            await self.close()
+
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=self.timeout)
+            self._client_loop_id = current_loop_id
         return self._client
 
     @retry(
@@ -130,7 +207,7 @@ class OpenF1Client:
         await _rate_limiter.acquire()
 
         url = f"{self.base_url}/{endpoint}"
-        client = self._get_client()
+        client = await self._get_client()
 
         logger.debug(f"Making {method} request to {endpoint} with params: {params}")
 
@@ -162,6 +239,8 @@ class OpenF1Client:
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error from OpenF1 API: {e}")
             raise OpenF1APIError(f"API error: {e.response.status_code} - {e.response.text}")
+        except OpenF1APIError:
+            raise
         except Exception as e:
             logger.error(f"Unexpected error calling OpenF1 API: {e}")
             raise OpenF1APIError(f"Unexpected error: {e}")
@@ -170,7 +249,42 @@ class OpenF1Client:
         self, endpoint: str, params: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Make a GET request to the OpenF1 API."""
-        return await self._request("GET", endpoint, params)
+        cache_key = self._cache_key(endpoint, params)
+        fresh_ttl, stale_ttl = self._cache_policy_for(endpoint, params)
+
+        fresh_payload = self._read_cache(cache_key, max_age_seconds=fresh_ttl)
+        if fresh_payload is not None:
+            logger.debug("Serving cached OpenF1 response for %s", cache_key)
+            return fresh_payload
+
+        loop_key = (id(asyncio.get_running_loop()), cache_key)
+        request_task = self._inflight_requests.get(loop_key)
+
+        if request_task is None:
+            request_task = asyncio.create_task(self._request("GET", endpoint, params))
+            self._inflight_requests[loop_key] = request_task
+
+        try:
+            payload = await request_task
+            if fresh_ttl > 0:
+                self._response_cache[cache_key] = (
+                    time.monotonic(),
+                    self._clone_payload(payload),
+                )
+            return self._clone_payload(payload)
+        except (OpenF1RateLimitError, OpenF1ConnectionError) as exc:
+            stale_payload = self._read_cache(cache_key, max_age_seconds=stale_ttl)
+            if stale_payload is not None:
+                logger.warning(
+                    "Serving stale OpenF1 cache for %s after upstream error: %s",
+                    cache_key,
+                    exc,
+                )
+                return stale_payload
+            raise
+        finally:
+            if self._inflight_requests.get(loop_key) is request_task and request_task.done():
+                self._inflight_requests.pop(loop_key, None)
 
     # ==================== Meetings ====================
 
@@ -599,8 +713,15 @@ class OpenF1Client:
     async def close(self) -> None:
         """Close the HTTP client connection."""
         if self._client:
-            await self._client.aclose()
-            self._client = None
+            try:
+                await self._client.aclose()
+            except RuntimeError as exc:
+                if "Event loop is closed" not in str(exc):
+                    raise
+                logger.warning("OpenF1 client closed after event loop shutdown")
+            finally:
+                self._client = None
+                self._client_loop_id = None
             logger.info("OpenF1 client connection closed")
 
 

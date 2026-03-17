@@ -1,32 +1,48 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import Layout from '@/components/layout/Layout';
 import SimpleSessionSelector from '@/components/dashboard/SimpleSessionSelector';
 import PitStopPredictionCard from '@/components/predictions/PitStopPredictionCard';
 import PositionForecastTable from '@/components/predictions/PositionForecastTable';
 import StrategyRecommendations from '@/components/predictions/StrategyRecommendations';
 import ConnectionStatus from '@/components/ui/ConnectionStatus';
+import PageHeader from '@/components/ui/PageHeader';
+import { EmptyState, StatCard, Surface } from '@/components/ui/Surface';
 import { usePredictions } from '@/hooks/usePredictions';
-import type { PitPrediction, StrategyAnalysis } from '@/types/predictions';
+import { apiFetch, ApiError } from '@/lib/api';
+import { getDriverDisplayName } from '@/lib/driver';
+import type {
+  DriverPositionForecast,
+  PitPrediction,
+  StrategyAnalysis,
+} from '@/types/predictions';
+import type { Driver } from '@/types/telemetry';
 
-interface Driver {
-  driver_number: number;
-  name_acronym: string;
-  first_name: string;
-  last_name: string;
-  team_name: string;
-  team_colour: string;
+interface ModelStatusPayload {
+  pit_predictor: Record<string, unknown>;
+  position_forecaster: Record<string, unknown>;
+  strategy_recommender: Record<string, unknown>;
+  models_loaded: boolean;
+  overall_mode?: string;
 }
+
+const tabs = [
+  { id: 'pit' as const, label: 'Pit Window', icon: 'Pit' },
+  { id: 'positions' as const, label: 'Position Drift', icon: 'Pos' },
+  { id: 'strategy' as const, label: 'Strategy', icon: 'Str' },
+];
 
 export default function PredictionsPage() {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [activeTab, setActiveTab] = useState<'pit' | 'positions' | 'strategy'>('pit');
   const [selectedDrivers, setSelectedDrivers] = useState<number[]>([]);
-  
-  // Use predictions hook
+  const [activeTab, setActiveTab] =
+    useState<'pit' | 'positions' | 'strategy'>('pit');
+  const [modelStatus, setModelStatus] = useState<ModelStatusPayload | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
+
   const {
     pitPredictions,
     positionForecast,
@@ -42,360 +58,344 @@ export default function PredictionsPage() {
   } = usePredictions({
     sessionKey: selectedSession || undefined,
     autoRefresh: true,
-    refreshInterval: 10000, // 10 seconds
+    refreshInterval: 10000,
   });
-  
-  // Fetch drivers when session changes
+
   useEffect(() => {
-    if (selectedSession) {
-      fetchDrivers();
+    const loadModelStatus = async () => {
+      try {
+        const payload = await apiFetch<ModelStatusPayload>(
+          '/api/predictions/models/status'
+        );
+        setModelStatus(payload);
+      } catch (fetchError) {
+        setPageError(
+          fetchError instanceof ApiError
+            ? fetchError.message
+            : 'Failed to load prediction mode.'
+        );
+      }
+    };
+
+    loadModelStatus();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSession) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const loadDrivers = async () => {
+      try {
+        const payload = await apiFetch<{ data: Driver[] }>('/api/telemetry/drivers', {
+          params: { session_key: selectedSession },
+        });
+        setDrivers(payload.data);
+        setSelectedDrivers(
+          payload.data.slice(0, 6).map((driver) => driver.driver_number)
+        );
+      } catch (fetchError) {
+        setDrivers([]);
+        setPageError(
+          fetchError instanceof ApiError
+            ? fetchError.message
+            : 'Failed to load selected session drivers.'
+        );
+      }
+    };
+
+    loadDrivers();
   }, [selectedSession]);
-  
-  const fetchDrivers = async () => {
-    try {
-      const response = await fetch(
-        `http://localhost:8000/api/telemetry/drivers?session_key=${selectedSession}`
-      );
-      const data = await response.json();
-      setDrivers(data);
-      setSelectedDrivers(data.slice(0, 5).map((d: Driver) => d.driver_number));
-    } catch (error) {
-      console.error('Failed to fetch drivers:', error);
-    }
-  };
-  
-  // Get pit predictions for selected drivers
+
   const selectedPitPredictions = useMemo(() => {
     const predictions: Array<{ driver: Driver; prediction: PitPrediction }> = [];
-    
-    selectedDrivers.forEach(driverNum => {
-      const prediction = pitPredictions.get(driverNum);
-      const driver = drivers.find(d => d.driver_number === driverNum);
-      
+
+    selectedDrivers.forEach((driverNumber) => {
+      const prediction = pitPredictions.get(driverNumber);
+      const driver = drivers.find((item) => item.driver_number === driverNumber);
+
       if (prediction && driver) {
         predictions.push({ driver, prediction });
       }
     });
-    
-    // Sort by probability (highest first)
-    return predictions.sort((a, b) => b.prediction.probability - a.prediction.probability);
-  }, [selectedDrivers, pitPredictions, drivers]);
-  
-  // Get strategies for selected drivers
+
+    return predictions.sort(
+      (left, right) => right.prediction.probability - left.prediction.probability
+    );
+  }, [drivers, pitPredictions, selectedDrivers]);
+
   const selectedStrategies = useMemo(() => {
     const strategyList: StrategyAnalysis[] = [];
-    
-    selectedDrivers.forEach(driverNum => {
-      const strategy = strategies.get(driverNum);
+
+    selectedDrivers.forEach((driverNumber) => {
+      const strategy = strategies.get(driverNumber);
       if (strategy) {
         strategyList.push(strategy);
       }
     });
-    
+
     return strategyList;
   }, [selectedDrivers, strategies]);
-  
-  // Enhanced position forecast with driver info
-  const enhancedPositionForecast = useMemo(() => {
-    return positionForecast.map(pred => {
-      const driver = drivers.find(d => d.driver_number === pred.driver_number);
+
+  const filteredPositionForecast = useMemo(() => {
+    const enriched = positionForecast.map((prediction: DriverPositionForecast) => {
+      const driver = drivers.find(
+        (item) => item.driver_number === prediction.driver_number
+      );
       return {
-        ...pred,
-        driver_name: driver ? `${driver.first_name} ${driver.last_name}` : `Driver ${pred.driver_number}`,
-        team_name: driver?.team_name || 'Unknown',
+        ...prediction,
+        driver_name: driver
+          ? getDriverDisplayName(driver)
+          : `Driver ${prediction.driver_number}`,
+        team_name: driver?.team_name || prediction.team_name || 'Unknown',
       };
     });
-  }, [positionForecast, drivers]);
-  
-  // Filter position forecast for selected drivers
-  const filteredPositionForecast = useMemo(() => {
-    if (selectedDrivers.length === 0) return enhancedPositionForecast;
-    return enhancedPositionForecast.filter(pred => selectedDrivers.includes(pred.driver_number));
-  }, [enhancedPositionForecast, selectedDrivers]);
-  
-  const handleDriverToggle = (driverNumber: number) => {
-    setSelectedDrivers(prev => {
-      if (prev.includes(driverNumber)) {
-        return prev.filter(d => d !== driverNumber);
-      }
-      return [...prev, driverNumber];
-    });
-  };
-  
-  const tabs = [
-    { id: 'pit' as const, label: 'Pit Stop Predictions', icon: '🏁' },
-    { id: 'positions' as const, label: 'Position Forecast', icon: '📊' },
-    { id: 'strategy' as const, label: 'Strategy', icon: '📋' },
-  ];
-  
+
+    return selectedDrivers.length > 0
+      ? enriched.filter((prediction) =>
+          selectedDrivers.includes(prediction.driver_number)
+        )
+      : enriched;
+  }, [drivers, positionForecast, selectedDrivers]);
+
+  const topPrediction = selectedPitPredictions[0];
+
   return (
     <Layout>
-      <div className="p-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-6 flex items-center justify-between"
-        >
-          <div>
-            <h1 className="text-2xl font-bold text-white">ML Predictions Dashboard</h1>
-            <p className="text-sm text-gray-400 mt-1">
-              AI-powered predictions for pit stops, positions, and strategy
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {lastUpdate && (
-              <span className="text-xs text-gray-500">
-                Last update: {new Date(lastUpdate).toLocaleTimeString()}
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Hybrid Prediction Layer"
+          title="Predictions Workspace"
+          description="This page combines live session context with whichever prediction assets are currently available. If trained models are missing, the pit and position outputs fall back to heuristics; strategy remains rule-based by design."
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              <ConnectionStatus
+                isConnected={isConnected}
+                connectionState={isConnected ? 'connected' : 'disconnected'}
+                showDetails={false}
+              />
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.2em] text-slate-300">
+                {modelStatus?.overall_mode || 'unknown'}
               </span>
-            )}
-            <ConnectionStatus
-              isConnected={isConnected}
-              connectionState={isConnected ? 'connected' : 'disconnected'}
-              showDetails={false}
-            />
-          </div>
-        </motion.div>
-        
-        {/* Session Selector */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-6"
-        >
-          <SimpleSessionSelector onSelect={setSelectedSession} />
-        </motion.div>
-        
-        {selectedSession && (
+            </div>
+          }
+        />
+
+        <SimpleSessionSelector onSelect={setSelectedSession} />
+
+        <div className="panel-grid">
+          <StatCard
+            label="Mode"
+            value={modelStatus?.overall_mode || 'Unknown'}
+            helper="Overall prediction runtime mode"
+            tone="accent"
+          />
+          <StatCard
+            label="Pit Engine"
+            value={String(modelStatus?.pit_predictor?.mode || 'unknown')}
+            helper="Trained model or heuristic fallback"
+          />
+          <StatCard
+            label="Position Engine"
+            value={String(modelStatus?.position_forecaster?.mode || 'unknown')}
+            helper="Trained model or heuristic fallback"
+            tone="warning"
+          />
+          <StatCard
+            label="Top Pit Risk"
+            value={
+              topPrediction
+                ? `${(topPrediction.prediction.probability * 100).toFixed(0)}%`
+                : 'N/A'
+            }
+            helper={
+              topPrediction
+                ? `${topPrediction.driver.name_acronym} currently leads the pit-risk list`
+                : 'Load a session to generate a live ranking'
+            }
+            tone="success"
+          />
+        </div>
+
+        {pageError ? (
+          <Surface className="border-red-500/30">
+            <p className="text-sm text-red-300">{pageError}</p>
+          </Surface>
+        ) : null}
+
+        {!selectedSession ? (
+          <EmptyState
+            title="Select a session to start generating predictions"
+            description="Once a live session is selected, the page resolves the current driver roster, computes the live context and starts polling plus WebSocket updates for prediction bundles."
+          />
+        ) : null}
+
+        {selectedSession ? (
           <>
-            {/* Driver Selection */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="mb-6"
+            <Surface
+              title="Driver Focus"
+              subtitle="Select which drivers should stay in focus across pit, position and strategy views."
+              actions={
+                lastUpdate ? (
+                  <span className="font-mono text-xs uppercase tracking-[0.2em] text-slate-500">
+                    Updated {new Date(lastUpdate).toLocaleTimeString()}
+                  </span>
+                ) : null
+              }
             >
-              <h2 className="text-lg font-semibold text-white mb-3">Select Drivers</h2>
               <div className="flex flex-wrap gap-2">
-                {drivers.map(driver => (
-                  <motion.button
+                {drivers.map((driver) => (
+                  <button
                     key={driver.driver_number}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handleDriverToggle(driver.driver_number)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    onClick={() =>
+                      setSelectedDrivers((current) =>
+                        current.includes(driver.driver_number)
+                          ? current.filter((item) => item !== driver.driver_number)
+                          : [...current, driver.driver_number]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-2 text-sm font-medium transition-colors ${
                       selectedDrivers.includes(driver.driver_number)
-                        ? 'bg-f1-red text-white'
-                        : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                        ? 'border-f1-red bg-f1-red text-white'
+                        : 'border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20'
                     }`}
-                    style={{
-                      borderLeft: `3px solid #${driver.team_colour}`,
-                    }}
                   >
                     {driver.name_acronym}
-                  </motion.button>
+                  </button>
                 ))}
               </div>
-            </motion.div>
-            
-            {/* Tabs */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="mb-6"
+            </Surface>
+
+            <Surface
+              title="Prediction Views"
+              subtitle="Switch between imminent pit windows, position drift and tyre strategy."
             >
-              <div className="flex gap-2 border-b border-gray-700">
-                {tabs.map(tab => (
+              <div className="mb-5 flex flex-wrap gap-2">
+                {tabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-3 text-sm font-medium transition-colors ${
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                       activeTab === tab.id
-                        ? 'text-f1-red border-b-2 border-f1-red'
-                        : 'text-gray-400 hover:text-white'
+                        ? 'bg-f1-red text-white'
+                        : 'border border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20'
                     }`}
                   >
-                    <span className="mr-2">{tab.icon}</span>
+                    <span className="mr-2 font-mono text-xs uppercase tracking-[0.2em]">
+                      {tab.icon}
+                    </span>
                     {tab.label}
                   </button>
                 ))}
               </div>
-            </motion.div>
-            
-            {/* Content */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'pit' && (
-                <motion.div
-                  key="pit"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {pitError && (
-                    <div className="mb-4 p-4 bg-red-500/20 text-red-400 rounded-lg">
-                      {pitError}
-                    </div>
-                  )}
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {selectedPitPredictions.map(({ driver, prediction }, index) => (
-                      <motion.div
-                        key={driver.driver_number}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        <PitStopPredictionCard
-                          driver={driver}
-                          prediction={prediction}
-                          isHighlighted={prediction.probability >= 0.7}
-                        />
-                      </motion.div>
-                    ))}
-                    
-                    {selectedPitPredictions.length === 0 && !isLoadingPit && (
-                      <div className="col-span-full text-center py-12 text-gray-400">
-                        No predictions available. Select drivers to see pit predictions.
+
+              <AnimatePresence mode="wait">
+                {activeTab === 'pit' ? (
+                  <motion.div
+                    key="pit"
+                    initial={{ opacity: 0, x: -18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 18 }}
+                    className="space-y-5"
+                  >
+                    {pitError ? (
+                      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                        {pitError}
+                      </div>
+                    ) : null}
+
+                    {selectedPitPredictions.length === 0 && !isLoadingPit ? (
+                      <EmptyState
+                        title="No pit predictions yet"
+                        description="Keep at least one driver selected. The pit list fills as soon as the live prediction context resolves."
+                      />
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {selectedPitPredictions.map(({ driver, prediction }) => (
+                          <PitStopPredictionCard
+                            key={driver.driver_number}
+                            driver={driver}
+                            prediction={prediction}
+                            isHighlighted={prediction.probability >= 0.7}
+                          />
+                        ))}
                       </div>
                     )}
-                    
-                    {isLoadingPit && (
-                      <div className="col-span-full flex justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-f1-red border-t-transparent" />
+                  </motion.div>
+                ) : null}
+
+                {activeTab === 'positions' ? (
+                  <motion.div
+                    key="positions"
+                    initial={{ opacity: 0, x: -18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 18 }}
+                    className="space-y-5"
+                  >
+                    {positionError ? (
+                      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                        {positionError}
                       </div>
-                    )}
-                  </div>
-                  
-                  {/* Legend */}
-                  <div className="mt-6 p-4 bg-gray-800/50 rounded-lg">
-                    <h3 className="text-sm font-medium text-white mb-2">Understanding Predictions</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-400">
-                      <div>
-                        <span className="text-red-500 font-medium">Red Indicator</span>
-                        <p>High pit probability (≥70%) - pit stop imminent</p>
+                    ) : null}
+                    <PositionForecastTable
+                      predictions={filteredPositionForecast}
+                      isLoading={isLoadingPositions}
+                    />
+                  </motion.div>
+                ) : null}
+
+                {activeTab === 'strategy' ? (
+                  <motion.div
+                    key="strategy"
+                    initial={{ opacity: 0, x: -18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 18 }}
+                    className="space-y-5"
+                  >
+                    {strategyError ? (
+                      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                        {strategyError}
                       </div>
-                      <div>
-                        <span className="text-yellow-500 font-medium">Yellow Indicator</span>
-                        <p>Medium probability (40-69%) - monitor closely</p>
-                      </div>
-                      <div>
-                        <span className="text-green-500 font-medium">Green Indicator</span>
-                        <p>Low probability (&lt;40%) - unlikely to pit soon</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-              
-              {activeTab === 'positions' && (
-                <motion.div
-                  key="positions"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {positionError && (
-                    <div className="mb-4 p-4 bg-red-500/20 text-red-400 rounded-lg">
-                      {positionError}
-                    </div>
-                  )}
-                  
-                  <PositionForecastTable
-                    predictions={filteredPositionForecast}
-                    isLoading={isLoadingPositions}
-                  />
-                </motion.div>
-              )}
-              
-              {activeTab === 'strategy' && (
-                <motion.div
-                  key="strategy"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {strategyError && (
-                    <div className="mb-4 p-4 bg-red-500/20 text-red-400 rounded-lg">
-                      {strategyError}
-                    </div>
-                  )}
-                  
-                  <StrategyRecommendations
-                    recommendations={selectedStrategies}
-                    isLoading={isLoadingStrategy}
-                  />
-                  
-                  {selectedStrategies.length === 0 && !isLoadingStrategy && (
-                    <div className="text-center py-12 text-gray-400">
-                      No strategy recommendations. Select drivers to see strategies.
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-            
-            {/* Model Accuracy Info */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="mt-8 p-6 bg-gray-800/50 rounded-xl border border-gray-700/50"
+                    ) : null}
+                    <StrategyRecommendations
+                      recommendations={selectedStrategies}
+                      isLoading={isLoadingStrategy}
+                    />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </Surface>
+
+            <Surface
+              title="What you are seeing"
+              subtitle="Short explanation for non-specialist users."
             >
-              <h3 className="text-lg font-semibold text-white mb-4">Model Performance</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-f1-red">85%</p>
-                  <p className="text-sm text-gray-400 mt-1">Pit Prediction Accuracy</p>
-                  <p className="text-xs text-gray-500">Last 10 races</p>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="font-medium text-white">Pit window</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Estimates who looks close to stopping soon based on tyre age,
+                    pace drop, gap and stint shape.
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-green-400">78%</p>
-                  <p className="text-sm text-gray-400 mt-1">Position Forecast Accuracy</p>
-                  <p className="text-xs text-gray-500">Within 2 positions</p>
+                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="font-medium text-white">Position drift</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Projects how the order may move over the next laps from the
+                    current race snapshot.
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-yellow-400">72%</p>
-                  <p className="text-sm text-gray-400 mt-1">Strategy Optimization</p>
-                  <p className="text-xs text-gray-500">Positions gained vs baseline</p>
+                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-4">
+                  <p className="font-medium text-white">Strategy advice</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Suggests conservative or aggressive pit windows and tyre mixes
+                    based on the current stint.
+                  </p>
                 </div>
               </div>
-            </motion.div>
+            </Surface>
           </>
-        )}
-        
-        {!selectedSession && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex h-96 flex-col items-center justify-center text-gray-400"
-          >
-            <svg
-              className="mb-4 h-24 w-24 text-gray-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-              />
-            </svg>
-            <p className="text-xl">Select a session to view ML predictions</p>
-            <p className="mt-2 text-sm text-gray-500">
-              Predictions update automatically every 10 seconds
-            </p>
-          </motion.div>
-        )}
+        ) : null}
       </div>
     </Layout>
   );

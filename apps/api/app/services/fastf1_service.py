@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -79,6 +79,7 @@ class FastF1Service:
     def __init__(self):
         """Initialize Fast-F1 service with cache configuration."""
         self._cache_enabled = False
+        self._session_cache: Dict[Tuple[int, str, str], Session] = {}
         self._setup_cache()
 
     def _setup_cache(self) -> None:
@@ -120,11 +121,18 @@ class FastF1Service:
         if isinstance(session_type, SessionType):
             session_type = session_type.value
 
+        cache_key = (year, str(grand_prix), session_type)
+        cached_session = self._session_cache.get(cache_key)
+        if cached_session is not None:
+            logger.info(f"Using cached FastF1 session: {year} {grand_prix} {session_type}")
+            return cached_session
+
         logger.info(f"Loading session: {year} {grand_prix} {session_type}")
 
         try:
             session = fastf1_get_session(year, grand_prix, session_type)
             session.load()
+            self._session_cache[cache_key] = session
             logger.info(
                 f"Session loaded successfully: {session.event['EventName']} - "
                 f"{len(session.laps)} laps recorded"
@@ -742,11 +750,15 @@ class FastF1Service:
         Returns:
             SessionInfo dataclass with session details
         """
+        session_meta = getattr(session, "session_info", {}) or {}
+        session_type = session_meta.get("Type") or getattr(session, "name", None) or "Unknown"
+        session_name = session_meta.get("Name") or getattr(session, "name", None) or session_type
+
         return SessionInfo(
             year=int(session.event["EventDate"].year),
             grand_prix=session.event["EventName"],
-            session_type=session.event["Session"],
-            session_name=session.event["Session"],
+            session_type=session_type,
+            session_name=session_name,
             date=session.date,
             total_laps=len(session.laps),
             drivers=list(session.laps["Driver"].unique()),

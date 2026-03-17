@@ -3,9 +3,12 @@ Application configuration using Pydantic Settings.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 
 class Settings(BaseSettings):
@@ -33,10 +36,10 @@ class Settings(BaseSettings):
     openf1_base_url: str = "https://api.openf1.org/v1"
 
     # Fast-F1
-    fastf1_cache_dir: str = "./data/cache/fastf1"
+    fastf1_cache_dir: str = str(PROJECT_ROOT / "data" / "cache" / "fastf1")
 
     # ML Models
-    models_dir: str = "./packages/ml-models"
+    models_dir: str = str(PROJECT_ROOT / "packages" / "ml-models")
 
     # Redis (optional, for caching)
     redis_url: str = ""

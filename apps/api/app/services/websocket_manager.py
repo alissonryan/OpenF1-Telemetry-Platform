@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Set
 from fastapi import WebSocket
 
 from app.services.openf1_client import openf1_client
+from app.services.prediction_runtime import prediction_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,9 @@ class ClientSubscription:
     """Tracks what data a client is subscribed to."""
     session_key: Optional[int] = None
     driver_numbers: Set[int] = field(default_factory=set)
-    channels: Set[str] = field(default_factory=lambda: {"telemetry", "positions", "pit_stop", "weather"})
+    channels: Set[str] = field(
+        default_factory=lambda: {"telemetry", "positions", "pit_stop", "weather"}
+    )
 
 
 class ConnectionManager:
@@ -51,6 +54,7 @@ class ConnectionManager:
         self._telemetry_interval = 0.27  # ~3.7Hz
         self._position_interval = 4  # 4 seconds
         self._weather_interval = 60  # 1 minute
+        self._prediction_interval = 12  # seconds
         self._telemetry_buffer: Dict[int, List[dict]] = {}  # Circular buffer per driver
         self._buffer_size = 100  # Keep last 100 data points
         
@@ -136,7 +140,7 @@ class ConnectionManager:
             "type": "heartbeat",
             "timestamp": time.time(),
         }
-        await self.broadcast(message, channel="heartbeat")
+        await self.broadcast(message)
         
     async def send_telemetry(self, session_key: int, driver_numbers: Optional[List[int]] = None) -> None:
         """Fetch and broadcast telemetry data for a session."""
@@ -231,6 +235,33 @@ class ConnectionManager:
                 
         except Exception as e:
             logger.error(f"Error fetching weather: {e}")
+
+    async def send_predictions(
+        self,
+        session_key: int,
+        driver_numbers: Optional[List[int]] = None,
+    ) -> None:
+        """Fetch and broadcast live prediction bundle for a session."""
+        try:
+            bundle = await prediction_runtime.get_live_predictions(
+                session_key=session_key,
+                driver_numbers=driver_numbers or None,
+                laps_ahead=10,
+            )
+            message = {
+                "type": "predictions",
+                "data": {
+                    "pit_predictions": bundle["pit_predictions"],
+                    "position_forecast": bundle["position_forecast"]["predictions"],
+                    "strategies": bundle["strategies"],
+                    "model_status": bundle["model_status"],
+                    "generated_at": bundle["generated_at"],
+                },
+                "timestamp": time.time(),
+            }
+            await self.broadcast_to_session(session_key, message, channel="predictions")
+        except Exception as e:
+            logger.error(f"Error fetching predictions: {e}")
             
     # ==================== Background Streaming Tasks ====================
     
@@ -254,6 +285,9 @@ class ConnectionManager:
         )
         self._background_tasks.add(
             asyncio.create_task(self._weather_loop())
+        )
+        self._background_tasks.add(
+            asyncio.create_task(self._prediction_loop())
         )
         
     async def stop_streaming(self) -> None:
@@ -346,6 +380,28 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Weather streaming error: {e}")
                 await asyncio.sleep(5)
+
+    async def _prediction_loop(self) -> None:
+        """Stream prediction updates for active prediction subscribers."""
+        while self._running:
+            try:
+                sessions: Dict[int, Set[int]] = {}
+                for subscription in self.active_connections.values():
+                    if subscription.session_key and "predictions" in subscription.channels:
+                        if subscription.session_key not in sessions:
+                            sessions[subscription.session_key] = set()
+                        sessions[subscription.session_key].update(subscription.driver_numbers)
+
+                for session_key, driver_numbers in sessions.items():
+                    await self.send_predictions(session_key, list(driver_numbers))
+
+                await asyncio.sleep(self._prediction_interval)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Prediction streaming error: {e}")
+                await asyncio.sleep(2)
 
 
 # Global connection manager instance

@@ -44,6 +44,19 @@ interface UsePredictionsReturn {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+async function getResponseError(response: Response): Promise<string> {
+  try {
+    const payload = await response.json();
+    if (typeof payload?.detail === 'string') {
+      return payload.detail;
+    }
+  } catch {
+    // Fall back to the HTTP status text when the response body is not JSON.
+  }
+
+  return `HTTP ${response.status}`;
+}
+
 export function usePredictions(options: UsePredictionsOptions = {}): UsePredictionsReturn {
   const { sessionKey, autoRefresh = true, refreshInterval = 10000 } = options;
   
@@ -63,21 +76,33 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   
   // WebSocket for real-time updates
-  const { isConnected, subscribe } = useWebSocket({
+  const { isConnected, subscribe, connect } = useWebSocket({
     autoConnect: false,
     onMessage: (message) => {
       if (message.type === 'predictions') {
         // Handle real-time prediction updates
         if (message.data?.pit_predictions) {
-          const newMap = new Map(pitPredictions);
-          message.data.pit_predictions.forEach((pred: PitPrediction) => {
-            newMap.set(pred.driver_number, pred);
+          setPitPredictions((previous) => {
+            const next = new Map(previous);
+            message.data.pit_predictions.forEach((pred: PitPrediction) => {
+              next.set(pred.driver_number, pred);
+            });
+            return next;
           });
-          setPitPredictions(newMap);
         }
         
         if (message.data?.position_forecast) {
           setPositionForecast(message.data.position_forecast);
+        }
+
+        if (message.data?.strategies) {
+          setStrategies(() => {
+            const next = new Map<number, StrategyAnalysis>();
+            message.data.strategies.forEach((strategy: StrategyAnalysis) => {
+              next.set(strategy.driver_number, strategy);
+            });
+            return next;
+          });
         }
         
         setLastUpdate(Date.now());
@@ -104,7 +129,7 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
       const response = await fetch(`${API_BASE}/api/predictions/pit-stop/batch?${params}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(await getResponseError(response));
       }
       
       const data: PitPrediction[] = await response.json();
@@ -140,7 +165,7 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
       const response = await fetch(`${API_BASE}/api/predictions/position-forecast?${params}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(await getResponseError(response));
       }
       
       const data: PositionForecastResponse = await response.json();
@@ -165,17 +190,18 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
       const response = await fetch(`${API_BASE}/api/predictions/strategy/batch?session_key=${sessionKey}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(await getResponseError(response));
       }
       
       const data: StrategyAnalysis[] = await response.json();
-      
-      const newMap = new Map(strategies);
-      data.forEach(strat => {
-        newMap.set(strat.driver_number, strat);
+
+      setStrategies((previous) => {
+        const next = new Map(previous);
+        data.forEach((strategy) => {
+          next.set(strategy.driver_number, strategy);
+        });
+        return next;
       });
-      
-      setStrategies(newMap);
       setLastUpdate(Date.now());
     } catch (err) {
       console.error('Failed to fetch strategy:', err);
@@ -183,15 +209,13 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
     } finally {
       setIsLoadingStrategy(false);
     }
-  }, [sessionKey, strategies]);
+  }, [sessionKey]);
   
   // Fetch all predictions
   const fetchAllPredictions = useCallback(async () => {
-    await Promise.all([
-      fetchPitPredictions(),
-      fetchPositionForecast(),
-      fetchStrategy(0), // Fetch all strategies
-    ]);
+    await fetchPitPredictions();
+    await fetchPositionForecast();
+    await fetchStrategy(0);
   }, [fetchPitPredictions, fetchPositionForecast, fetchStrategy]);
   
   // Auto-refresh effect
@@ -206,6 +230,12 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
     
     return () => clearInterval(interval);
   }, [autoRefresh, sessionKey, refreshInterval, fetchAllPredictions]);
+
+  useEffect(() => {
+    if (sessionKey) {
+      connect();
+    }
+  }, [sessionKey, connect]);
   
   // Subscribe to WebSocket predictions channel
   useEffect(() => {

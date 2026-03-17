@@ -123,6 +123,7 @@ class SessionResponse(BaseModel):
     def validate_session_type(cls, v: str) -> str:
         """Validate session type."""
         valid_types = [
+            "Practice",
             "Practice 1",
             "Practice 2",
             "Practice 3",

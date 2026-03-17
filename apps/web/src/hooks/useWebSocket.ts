@@ -356,14 +356,21 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
   // Auto-connect on mount
   useEffect(() => {
-    if (autoConnect) {
-      connect();
+    if (!autoConnect) {
+      return;
     }
 
+    connect();
     return () => {
       disconnect();
     };
   }, [autoConnect, connect, disconnect]);
+
+  useEffect(() => {
+    return () => {
+      disconnect();
+    };
+  }, [disconnect]);
 
   return {
     connectionState,

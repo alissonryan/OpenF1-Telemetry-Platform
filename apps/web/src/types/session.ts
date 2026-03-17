@@ -2,7 +2,7 @@ export interface Session {
   session_key: number;
   meeting_key: number;
   location: string;
-  session_type: 'practice' | 'qualifying' | 'sprint' | 'race';
+  session_type: string;
   session_name: string;
   date_start: string;
   date_end: string;

@@ -4,7 +4,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 interface UseF1DataOptions<T> {
   endpoint: string;
-  params?: Record<string, any>;
+  params?: Record<string, string | number | boolean | null | undefined>;
   enabled?: boolean;
   refetchInterval?: number;
 }
@@ -71,7 +71,7 @@ export function useMeetings(year?: number) {
 
 export function useSessions(meetingKey?: number) {
   return useF1Data({
-    endpoint: '/api/sessions/sessions',
+    endpoint: '/api/sessions',
     params: { meeting_key: meetingKey },
     enabled: !!meetingKey,
   });
@@ -96,7 +96,7 @@ export function useCarData(sessionKey?: number, driverNumber?: number, limit?: n
 
 export function usePositions(sessionKey?: number, latest?: boolean) {
   return useF1Data({
-    endpoint: '/api/telemetry/positions',
+    endpoint: '/api/telemetry/position',
     params: { session_key: sessionKey, latest },
     enabled: !!sessionKey,
     refetchInterval: 4000, // Positions update every 4 seconds
@@ -113,8 +113,7 @@ export function useLaps(sessionKey?: number, driverNumber?: number, lapNumber?: 
 
 export function useWeather(sessionKey?: number) {
   return useF1Data({
-    endpoint: '/api/sessions/weather',
-    params: { session_key: sessionKey },
+    endpoint: sessionKey ? `/api/sessions/${sessionKey}/weather` : '/api/sessions',
     enabled: !!sessionKey,
     refetchInterval: 60000, // Weather updates every minute
   });
@@ -122,8 +121,7 @@ export function useWeather(sessionKey?: number) {
 
 export function usePitStops(sessionKey?: number) {
   return useF1Data({
-    endpoint: '/api/sessions/pit',
-    params: { session_key: sessionKey },
+    endpoint: sessionKey ? `/api/sessions/${sessionKey}/pit` : '/api/sessions',
     enabled: !!sessionKey,
   });
 }
