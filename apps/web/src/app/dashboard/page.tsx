@@ -8,6 +8,7 @@ import SimpleDriverCard from '@/components/dashboard/SimpleDriverCard';
 import TelemetryChart from '@/components/charts/TelemetryChart';
 import Leaderboard from '@/components/dashboard/Leaderboard';
 import TrackMap, { DriverPosition, DriverInfo } from '@/components/dashboard/TrackMap';
+import WeatherWidget from '@/components/dashboard/WeatherWidget';
 import ConnectionStatus, { F1ConnectionIndicator } from '@/components/ui/ConnectionStatus';
 import useWebSocket from '@/hooks/useWebSocket';
 
@@ -318,7 +319,7 @@ export default function DashboardPage() {
               </motion.div>
             )}
 
-            {/* Track Map and Telemetry Grid */}
+            {/* Track Map, Weather and Telemetry Grid */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -326,8 +327,8 @@ export default function DashboardPage() {
               className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3"
             >
               {/* Track Map - Takes 1 column on large screens */}
-              <div className="lg:col-span-1">
-                <h2 className="mb-4 text-xl font-semibold text-white">Track Map</h2>
+              <div className="lg:col-span-1 space-y-4">
+                <h2 className="text-xl font-semibold text-white">Track Map</h2>
                 <TrackMap
                   circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
                   positions={trackMapPositions}
@@ -338,6 +339,12 @@ export default function DashboardPage() {
                   showSectors={true}
                   size="md"
                   className="aspect-square"
+                />
+                {/* Weather Widget below Track Map */}
+                <WeatherWidget
+                  circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
+                  autoRefresh={true}
+                  compact={false}
                 />
               </div>
 
