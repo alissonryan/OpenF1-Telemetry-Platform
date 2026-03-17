@@ -1,13 +1,32 @@
 # F1 Telemetry Platform
 
-Real-time F1 telemetry dashboard and ML-powered predictions for Formula 1.
+Plataforma completa de telemetria F1 em tempo real com ML predictions e Fantasy F1 Helper.
 
 ## 🏎️ Features
 
-- **Live Telemetry**: Real-time car data including speed, throttle, brake, and gear at 3.7Hz
-- **Track Position**: Live driver positions on track with timing data
-- **ML Predictions**: AI-powered pit stop and position predictions
-- **Strategy Analysis**: Tyre strategy and pit window recommendations
+### Real-time
+- **Live Telemetry**: Dados em tempo real a 3.7Hz (speed, throttle, brake, gear, RPM, DRS)
+- **WebSocket Streaming**: Atualizações instantâneas sem polling
+- **Track Map**: Visualização de 40 circuitos com posições dos pilotos
+- **Weather Widget**: Clima em tempo real via Open-Meteo
+
+### ML & Analytics
+- **Pit Stop Predictor**: Previsão de pit stops com probabilidade
+- **Position Forecast**: Previsão de posições finais
+- **Strategy Recommender**: Análise de estratégias e pit windows
+- **Fantasy F1 Helper**: Previsão de pontos e recomendações de time
+
+### Historical Data
+- **F1DB Integration**: 74 anos de dados (1950-2024)
+- **Drivers**: 770+ pilotos históricos
+- **Constructors**: 140+ equipes
+- **Races**: 1,100+ corridas
+
+### APIs Integradas
+- **OpenF1** - Telemetria em tempo real
+- **Fast-F1** - Análise histórica avançada
+- **Open-Meteo** - Dados meteorológicos
+- **F1DB** - Banco de dados histórico completo
 
 ## 🛠️ Tech Stack
 
@@ -16,18 +35,23 @@ Real-time F1 telemetry dashboard and ML-powered predictions for Formula 1.
 - **React 18** - Concurrent features
 - **TypeScript** - Type safety
 - **Tailwind CSS** - Utility-first styling
+- **Framer Motion** - Animações fluidas
 - **Recharts** - Data visualization
-- **Framer Motion** - Animations
+- **Zustand** - State management
 
 ### Backend
 - **FastAPI** - Modern Python API framework
-- **Fast-F1** - F1 data library
+- **WebSocket** - Real-time communication
+- **Fast-F1** - F1 data analysis
 - **scikit-learn** - Machine learning
-- **WebSockets** - Real-time communication
+- **XGBoost** - Gradient boosting
+- **SQLite** - F1DB database
 
-### Data Sources
-- **OpenF1 API** - Real-time telemetry data
-- **Fast-F1** - Historical data and advanced analysis
+### ML Models
+- Pit Stop Predictor (GradientBoosting)
+- Position Forecaster (XGBoost)
+- Strategy Recommender (Rule-based)
+- Fantasy Points Predictor
 
 ## 📁 Project Structure
 
