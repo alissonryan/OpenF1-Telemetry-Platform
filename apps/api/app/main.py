@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import fastf1, predictions, sessions, telemetry, websocket
+from app.routers import fastf1, predictions, sessions, telemetry, websocket, weather
 
 
 from app.routers.websocket import start_websocket_streaming, stop_websocket_streaming
@@ -93,6 +93,11 @@ app.include_router(
     prefix="/ws",
     tags=["WebSocket"],
 )
+app.include_router(
+    weather.router,
+    prefix="/api/weather",
+    tags=["Weather (Open-Meteo)"],
+)
 
 
 @app.get("/")
@@ -109,6 +114,7 @@ async def root():
             "fastf1": "/api/fastf1",
             "predictions": "/api/predictions",
             "websocket": "/ws",
+            "weather": "/api/weather",
         },
     }
 
