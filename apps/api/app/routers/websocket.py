@@ -1,86 +1,233 @@
 """
 WebSocket router for real-time data streaming.
+
+Provides real-time F1 telemetry data via WebSocket:
+- Car telemetry (~3.7Hz): speed, throttle, brake, gear, RPM, DRS
+- Positions (~4s intervals): driver positions on track
+- Pit stops: real-time pit stop notifications
+- Weather: track conditions updates
+- Heartbeat: connection health monitoring
+
+Usage:
+    ws://localhost:8000/ws?session_key=9471
+    
+Commands (send JSON):
+    {"command": "subscribe", "session_key": 9471, "driver_numbers": [1, 11], "channels": ["telemetry", "positions"]}
+    {"command": "ping"}
 """
 
 import asyncio
 import json
-from typing import Optional
+import logging
+import time
+from typing import List, Optional, Set
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
+from app.services.websocket_manager import connection_manager
 
 router = APIRouter()
-
-
-class ConnectionManager:
-    """Manages WebSocket connections."""
-
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        """Accept a new WebSocket connection."""
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        """Remove a WebSocket connection."""
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: dict):
-        """Broadcast a message to all connected clients."""
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                # Connection might be closed
-                pass
-
-
-manager = ConnectionManager()
+logger = logging.getLogger(__name__)
 
 
 @router.websocket("/")
 async def websocket_endpoint(
     websocket: WebSocket,
-    session_key: Optional[int] = None,
+    session_key: Optional[int] = Query(None, description="Session key to subscribe"),
 ):
     """
     WebSocket endpoint for real-time telemetry streaming.
-
-    Streams car data, positions, and timing updates.
+    
+    Query Parameters:
+        session_key: Optional session key to auto-subscribe on connect
+    
+    Client Commands:
+        subscribe: Subscribe to data channels
+            {"command": "subscribe", "session_key": 9471, "driver_numbers": [1, 11], "channels": ["telemetry"]}
+        ping: Connection health check
+            {"command": "ping"}
+    
+    Server Messages:
+        telemetry: Real-time car data (~3.7Hz)
+            {"type": "telemetry", "data": [...], "driver_number": 1, "timestamp": ...}
+        positions: Driver positions (~4s)
+            {"type": "positions", "data": [...], "timestamp": ...}
+        pit_stop: Pit stop updates
+            {"type": "pit_stop", "data": {...}, "timestamp": ...}
+        weather: Track conditions (~60s)
+            {"type": "weather", "data": {...}, "timestamp": ...}
+        heartbeat: Connection health (~30s)
+            {"type": "heartbeat", "timestamp": ...}
+        pong: Response to ping
+            {"type": "pong", "timestamp": ...}
+        error: Error message
+            {"type": "error", "message": "..."}
     """
-    await manager.connect(websocket)
+    await connection_manager.connect(websocket)
+    
+    # Auto-subscribe if session_key provided
+    if session_key:
+        connection_manager.update_subscription(websocket, session_key=session_key)
+        await websocket.send_json({
+            "type": "subscribed",
+            "session_key": session_key,
+            "channels": list(connection_manager.active_connections[websocket].channels),
+        })
+    
     try:
         while True:
-            # Wait for any incoming message (subscription commands, etc.)
-            data = await websocket.receive_text()
-
+            # Wait for incoming messages with timeout for heartbeat
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=60)
+            except asyncio.TimeoutError:
+                # Send heartbeat if no message received
+                await websocket.send_json({
+                    "type": "heartbeat",
+                    "timestamp": time.time(),
+                })
+                continue
+            
             try:
                 message = json.loads(data)
                 command = message.get("command")
-
+                
                 if command == "subscribe":
-                    # Handle subscription to specific data streams
-                    channels = message.get("channels", [])
-                    await websocket.send_json(
-                        {"type": "subscribed", "channels": channels}
+                    # Handle subscription
+                    new_session_key = message.get("session_key")
+                    driver_numbers = message.get("driver_numbers", [])
+                    channels = message.get("channels", ["telemetry", "positions", "pit_stop", "weather"])
+                    
+                    connection_manager.update_subscription(
+                        websocket,
+                        session_key=new_session_key,
+                        driver_numbers=driver_numbers,
+                        channels=channels,
                     )
-
+                    
+                    await websocket.send_json({
+                        "type": "subscribed",
+                        "session_key": new_session_key,
+                        "driver_numbers": driver_numbers,
+                        "channels": list(channels),
+                        "timestamp": time.time(),
+                    })
+                    logger.info(f"Client subscribed to session {new_session_key}, drivers: {driver_numbers}")
+                    
+                elif command == "unsubscribe":
+                    # Handle unsubscription
+                    channels = message.get("channels", [])
+                    if channels:
+                        current_sub = connection_manager.active_connections.get(websocket)
+                        if current_sub:
+                            current_sub.channels -= set(channels)
+                            
+                    await websocket.send_json({
+                        "type": "unsubscribed",
+                        "channels": channels,
+                        "timestamp": time.time(),
+                    })
+                    
                 elif command == "ping":
-                    await websocket.send_json({"type": "pong"})
-
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": time.time(),
+                    })
+                    
+                elif command == "get_buffer":
+                    # Get buffered telemetry data
+                    driver_number = message.get("driver_number")
+                    if driver_number:
+                        buffer = connection_manager._telemetry_buffer.get(driver_number, [])
+                        await websocket.send_json({
+                            "type": "buffer",
+                            "driver_number": driver_number,
+                            "data": buffer[-50:],  # Last 50 points
+                            "timestamp": time.time(),
+                        })
+                        
+                else:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Unknown command: {command}",
+                    })
+                    
             except json.JSONDecodeError:
-                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
-
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Invalid JSON format",
+                })
+                
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        connection_manager.disconnect(websocket)
+        logger.info("Client disconnected normally")
+        
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        connection_manager.disconnect(websocket)
 
 
-async def broadcast_telemetry(data: dict):
-    """Broadcast telemetry data to all connected clients."""
-    await manager.broadcast({"type": "telemetry", "data": data})
+# ==================== Lifecycle Events ====================
+
+async def start_websocket_streaming():
+    """Start background streaming tasks. Called on app startup."""
+    await connection_manager.start_streaming()
+    logger.info("WebSocket streaming started")
 
 
-async def broadcast_positions(data: dict):
-    """Broadcast position data to all connected clients."""
-    await manager.broadcast({"type": "positions", "data": data})
+async def stop_websocket_streaming():
+    """Stop background streaming tasks. Called on app shutdown."""
+    await connection_manager.stop_streaming()
+    logger.info("WebSocket streaming stopped")
+
+
+# ==================== Utility Functions ====================
+
+async def broadcast_telemetry(session_key: int, data: dict, driver_number: Optional[int] = None):
+    """Broadcast telemetry data to session subscribers."""
+    message = {
+        "type": "telemetry",
+        "data": data,
+        "driver_number": driver_number,
+        "timestamp": time.time(),
+    }
+    await connection_manager.broadcast_to_session(session_key, message, channel="telemetry")
+
+
+async def broadcast_positions(session_key: int, data: dict):
+    """Broadcast position data to session subscribers."""
+    message = {
+        "type": "positions",
+        "data": data,
+        "timestamp": time.time(),
+    }
+    await connection_manager.broadcast_to_session(session_key, message, channel="positions")
+
+
+async def broadcast_pit_stop(session_key: int, data: dict):
+    """Broadcast pit stop data to session subscribers."""
+    message = {
+        "type": "pit_stop",
+        "data": data,
+        "timestamp": time.time(),
+    }
+    await connection_manager.broadcast_to_session(session_key, message, channel="pit_stop")
+
+
+async def broadcast_weather(session_key: int, data: dict):
+    """Broadcast weather data to session subscribers."""
+    message = {
+        "type": "weather",
+        "data": data,
+        "timestamp": time.time(),
+    }
+    await connection_manager.broadcast_to_session(session_key, message, channel="weather")
+
+
+def get_connection_count() -> int:
+    """Get number of active WebSocket connections."""
+    return len(connection_manager.active_connections)
+
+
+def get_session_subscribers(session_key: int) -> int:
+    """Get number of clients subscribed to a session."""
+    return len(connection_manager.get_session_clients(session_key))

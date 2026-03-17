@@ -11,6 +11,9 @@ from app.core.config import settings
 from app.routers import fastf1, predictions, sessions, telemetry, websocket
 
 
+from app.routers.websocket import start_websocket_streaming, stop_websocket_streaming
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events handler."""
@@ -18,9 +21,17 @@ async def lifespan(app: FastAPI):
     print(f"🚀 Starting F1 Telemetry API v{settings.app_version}")
     print(f"📍 OpenF1 API: {settings.openf1_base_url}")
     print(f"💾 Fast-F1 Cache: {settings.fastf1_cache_dir}")
+    
+    # Start WebSocket streaming
+    await start_websocket_streaming()
+    print("📡 WebSocket streaming started")
+    
     yield
+    
     # Shutdown
     print("🛑 Shutting down F1 Telemetry API")
+    await stop_websocket_streaming()
+    print("📡 WebSocket streaming stopped")
 
 
 app = FastAPI(
