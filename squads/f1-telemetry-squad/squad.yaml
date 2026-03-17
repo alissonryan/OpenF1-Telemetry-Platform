@@ -1,0 +1,169 @@
+# F1 Telemetry Squad - Squad Manifest
+# AIOX 2.1 Task-First Architecture
+
+name: f1-telemetry-squad
+version: 1.0.0
+short-title: F1 Telemetry & Prediction Platform
+description: |
+  Squad especializado para criar uma plataforma inovadora de telemetria F1 em tempo real 
+  com engine de predições usando Machine Learning. Combina dados da OpenF1 API (tempo real) 
+  e Fast-F1 (histórico/análise) para criar uma experiência disruptiva para fãs de F1.
+
+author: F1 Community
+license: MIT
+slashPrefix: f1
+
+aiox:
+  minVersion: 2.1.0
+  type: squad
+
+requires:
+  node: ">=20.0.0"
+  aiox: ">=2.1.0"
+  python: ">=3.11.0"
+
+tags:
+  - formula-1
+  - telemetry
+  - real-time
+  - machine-learning
+  - predictions
+  - openf1
+  - fast-f1
+  - data-visualization
+  - sports-analytics
+  - open-source
+
+components:
+  # Task-First Architecture - Tasks são o ponto de entrada principal
+  tasks:
+    - f1-setup-project.md
+    - f1-connect-openf1.md
+    - f1-connect-fastf1.md
+    - f1-design-database.md
+    - f1-build-realtime-dashboard.md
+    - f1-create-telemetry-charts.md
+    - f1-build-prediction-engine.md
+    - f1-train-ml-models.md
+    - f1-optimize-performance.md
+    - f1-deploy-platform.md
+  
+  agents:
+    - f1-architect.md
+    - f1-data-engineer.md
+    - f1-frontend-dev.md
+    - f1-ml-engineer.md
+    - f1-qa.md
+  
+  workflows:
+    - f1-full-development-cycle.md
+    - f1-ml-training-pipeline.md
+    - f1-race-day-operations.md
+  
+  checklists:
+    - f1-api-integration-checklist.md
+    - f1-ml-model-checklist.md
+    - f1-performance-checklist.md
+    - f1-accessibility-checklist.md
+  
+  templates:
+    - f1-component-template.md
+    - f1-api-service-template.md
+    - f1-ml-model-template.md
+  
+  scripts:
+    - f1-data-fetcher.py
+    - f1-ml-trainer.py
+    - f1-backfill-historical.py
+
+config:
+  extends: extend
+  coding-standards: config/coding-standards.md
+  tech-stack: config/tech-stack.md
+  source-tree: config/source-tree.md
+
+dependencies:
+  # Frontend
+  node:
+    - "next.js@^14.0.0"
+    - "react@^18.0.0"
+    - "typescript@^5.0.0"
+    - "tailwindcss@^3.4.0"
+    - "framer-motion@^11.0.0"
+    - "recharts@^2.12.0"
+    - "@tanstack/react-query@^5.0.0"
+    - "zustand@^4.5.0"
+    - "socket.io-client@^4.7.0"
+  
+  # Backend/Data/ML
+  python:
+    - "fastapi@>=0.109.0"
+    - "fastf1@>=3.4.0"
+    - "pandas@>=2.2.0"
+    - "numpy@>=1.26.0"
+    - "scikit-learn@>=1.4.0"
+    - "xgboost@>=2.0.0"
+    - "websockets@>=12.0"
+    - "uvicorn@>=0.27.0"
+    - "pydantic@>=2.6.0"
+    - "httpx@>=0.26.0"
+  
+  squads: []
+
+mcps:
+  # MCP servers para integração
+  openf1-api:
+    type: rest
+    baseUrl: https://api.openf1.org/v1
+    auth: none
+    rateLimit: 30/minute
+  
+  fastf1-cache:
+    type: local
+    path: ./cache/fastf1
+
+integration:
+  # Configurações de integração
+  apis:
+    openf1:
+      baseUrl: https://api.openf1.org/v1
+      endpoints:
+        - car_data
+        - laps
+        - position
+        - pit
+        - stints
+        - weather
+        - team_radio
+        - race_control
+        - drivers
+        - sessions
+      realtime:
+        enabled: true
+        updateRate: 3.7Hz
+      
+    fastf1:
+      type: python-library
+      features:
+        - telemetry-extraction
+        - lap-analysis
+        - session-data
+        - historical-data
+      caching:
+        enabled: true
+        path: ./cache/fastf1
+  
+  realtime:
+    provider: websocket
+    fallback: polling
+    interval: 4000  # 4 seconds for position updates
+  
+  ml:
+    framework: scikit-learn
+    features:
+      - pit-stop-prediction
+      - position-forecast
+      - strategy-analysis
+    training:
+      schedule: weekly
+      dataWindow: 2-years

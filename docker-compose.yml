@@ -1,0 +1,39 @@
+services:
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+    networks:
+      - f1-network
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - CORS_ORIGINS=["http://localhost:3000"]
+      - FASTF1_CACHE_DIR=/app/data/cache/fastf1
+    volumes:
+      - ./apps/api:/app
+      - ./data/cache:/app/data/cache
+      - ./packages/ml-models:/app/packages/ml-models
+    networks:
+      - f1-network
+
+networks:
+  f1-network:
+    driver: bridge

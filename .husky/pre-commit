@@ -1,0 +1,2 @@
+#!/bin/sh
+cd apps/web && npm run lint

@@ -1,0 +1,83 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Cache
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+apps/**/.env
+apps/**/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.onnx
+
+# Fast-F1 cache
+data/cache/fastf1/
+
+# Misc
+*.bak
+*.tmp
+
+# AIOX internal
+.agent/
+.aiox-core/
+.antigravity/
+.claude/
+.codex/
+.cursor/
+.factory/
+.gemini/
+.github/
+AGENTS.md

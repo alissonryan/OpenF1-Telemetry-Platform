@@ -1,0 +1,51 @@
+{
+  "name": "f1-telemetry-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "F1 Telemetry Dashboard + Prediction Engine",
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "dev:api": "cd apps/api && source .venv/bin/activate && uvicorn app.main:app --reload",
+    "build": "turbo build",
+    "lint": "cd apps/web && npm run lint",
+    "lint:fix": "cd apps/web && npm run lint:fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
+    "typecheck": "cd apps/web && npx tsc --noEmit",
+    "test": "turbo test",
+    "clean": "rm -rf node_modules apps/web/node_modules apps/web/.next",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "f1",
+    "telemetry",
+    "formula-1",
+    "dashboard",
+    "predictions",
+    "machine-learning"
+  ],
+  "author": "F1 Telemetry Squad",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  },
+  "packageManager": "npm@11.11.0"
+}

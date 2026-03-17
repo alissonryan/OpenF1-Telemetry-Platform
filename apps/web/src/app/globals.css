@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 21, 21, 30;
+  --background-end-rgb: 38, 38, 47;
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-jetbrains: 'JetBrains Mono', monospace;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--background-start-rgb)),
+    rgb(var(--background-end-rgb))
+  );
+  font-family: var(--font-inter);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* F1 Racing specific styles */
+@layer components {
+  .racing-gradient {
+    background: linear-gradient(135deg, #e80020 0%, #15151e 100%);
+  }
+
+  .team-border {
+    border-left: 4px solid;
+  }
+
+  .driver-card {
+    @apply rounded-lg bg-gray-800/50 p-4 backdrop-blur-sm transition-all hover:bg-gray-800/70;
+  }
+
+  .telemetry-value {
+    @apply font-mono text-lg font-semibold text-white;
+  }
+
+  .live-indicator {
+    @apply relative flex h-3 w-3;
+  }
+
+  .live-indicator::before {
+    content: '';
+    @apply absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75;
+  }
+
+  .live-indicator::after {
+    content: '';
+    @apply relative inline-flex h-3 w-3 rounded-full bg-green-500;
+  }
+}
