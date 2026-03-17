@@ -1,5 +1,5 @@
 """Routers module initialization."""
 
-from app.routers import fastf1, predictions, sessions, telemetry, websocket
+from app.routers import fastf1, f1db, predictions, sessions, telemetry, websocket, weather
 
-__all__ = ["telemetry", "sessions", "predictions", "websocket", "fastf1"]
+__all__ = ["telemetry", "sessions", "predictions", "websocket", "fastf1", "f1db", "weather"]

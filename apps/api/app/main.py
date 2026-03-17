@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import fastf1, predictions, sessions, telemetry, websocket, weather
+from app.routers import fastf1, f1db, predictions, sessions, telemetry, websocket, weather
 
 
 from app.routers.websocket import start_websocket_streaming, stop_websocket_streaming
@@ -42,15 +42,18 @@ app = FastAPI(
 This API provides access to:
 - **OpenF1 API**: Real-time telemetry data during live sessions
 - **Fast-F1**: Historical session data and detailed analysis
+- **F1DB**: Complete F1 database from 1950 to present (drivers, teams, circuits, races, standings)
 - **ML Predictions**: Pit stop timing, position forecasts, and strategy analysis
 
 ### Data Sources
 - [OpenF1 API](https://openf1.org/) - Real-time F1 data
 - [Fast-F1](https://docs.fastf1.dev/) - Historical F1 data analysis
+- [F1DB](https://github.com/f1db/f1db) - Comprehensive F1 database (1950-present)
 
 ### Rate Limits
 - OpenF1: 3 requests/second (free tier)
 - Fast-F1: Data is cached locally after first request
+- F1DB: Local SQLite database, no rate limits
 """,
     version="0.1.0",
     lifespan=lifespan,
@@ -98,6 +101,11 @@ app.include_router(
     prefix="/api/weather",
     tags=["Weather (Open-Meteo)"],
 )
+app.include_router(
+    f1db.router,
+    prefix="/api/f1db",
+    tags=["F1DB Historical Data"],
+)
 
 
 @app.get("/")
@@ -112,6 +120,7 @@ async def root():
             "telemetry": "/api/telemetry",
             "sessions": "/api/sessions",
             "fastf1": "/api/fastf1",
+            "f1db": "/api/f1db",
             "predictions": "/api/predictions",
             "websocket": "/ws",
             "weather": "/api/weather",

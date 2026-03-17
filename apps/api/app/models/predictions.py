@@ -1,6 +1,6 @@
 """Pydantic models for ML predictions."""
 
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -118,9 +118,9 @@ class AllPredictionsResponse(BaseModel):
 class ModelStatusResponse(BaseModel):
     """Status of ML models."""
 
-    pit_predictor: Dict[str, any]
-    position_forecaster: Dict[str, any]
-    strategy_recommender: Dict[str, any]
+    pit_predictor: Dict[str, Any]
+    position_forecaster: Dict[str, Any]
+    strategy_recommender: Dict[str, Any]
     models_loaded: bool
 
 
