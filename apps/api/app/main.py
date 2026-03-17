@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import fastf1, f1db, predictions, sessions, telemetry, websocket, weather
+from app.routers import fastf1, f1db, predictions, sessions, telemetry, websocket, weather, fantasy
 
 
 from app.routers.websocket import start_websocket_streaming, stop_websocket_streaming
@@ -106,6 +106,11 @@ app.include_router(
     prefix="/api/f1db",
     tags=["F1DB Historical Data"],
 )
+app.include_router(
+    fantasy.router,
+    prefix="/api/fantasy",
+    tags=["Fantasy F1 Helper"],
+)
 
 
 @app.get("/")
@@ -124,6 +129,7 @@ async def root():
             "predictions": "/api/predictions",
             "websocket": "/ws",
             "weather": "/api/weather",
+            "fantasy": "/api/fantasy",
         },
     }
 
