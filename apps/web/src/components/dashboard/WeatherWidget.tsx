@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import useWeather from '@/hooks/useWeather';
 import { WeatherIcon, WindArrow, TrackConditionIndicator } from '@/components/weather/WeatherIcons';
 import { getWindDirection } from '@/types/weather';
-import type { CurrentWeather, HourlyForecast } from '@/types/weather';
+import type { HourlyForecast } from '@/types/weather';
 
 interface WeatherWidgetProps {
   circuitName?: string;

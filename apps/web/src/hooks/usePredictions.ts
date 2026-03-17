@@ -79,31 +79,37 @@ export function usePredictions(options: UsePredictionsOptions = {}): UsePredicti
   const { isConnected, subscribe, connect } = useWebSocket({
     autoConnect: false,
     onMessage: (message) => {
-      if (message.type === 'predictions') {
-        // Handle real-time prediction updates
-        if (message.data?.pit_predictions) {
-          setPitPredictions((previous) => {
-            const next = new Map(previous);
-            message.data.pit_predictions.forEach((pred: PitPrediction) => {
-              next.set(pred.driver_number, pred);
+      if (message.type === 'predictions' && message.data) {
+          // Handle real-time prediction updates
+          const payload = message.data as {
+            pit_predictions?: PitPrediction[];
+            position_forecast?: DriverPositionForecast[];
+            strategies?: StrategyAnalysis[];
+          };
+          
+          if (payload.pit_predictions) {
+            setPitPredictions((previous) => {
+              const next = new Map(previous);
+              payload.pit_predictions!.forEach((pred) => {
+                next.set(pred.driver_number, pred);
+              });
+              return next;
             });
-            return next;
-          });
-        }
-        
-        if (message.data?.position_forecast) {
-          setPositionForecast(message.data.position_forecast);
-        }
+          }
+          
+          if (payload.position_forecast) {
+            setPositionForecast(payload.position_forecast);
+          }
 
-        if (message.data?.strategies) {
-          setStrategies(() => {
-            const next = new Map<number, StrategyAnalysis>();
-            message.data.strategies.forEach((strategy: StrategyAnalysis) => {
-              next.set(strategy.driver_number, strategy);
+          if (payload.strategies) {
+            setStrategies(() => {
+              const next = new Map<number, StrategyAnalysis>();
+              payload.strategies!.forEach((strategy) => {
+                next.set(strategy.driver_number, strategy);
+              });
+              return next;
             });
-            return next;
-          });
-        }
+          }
         
         setLastUpdate(Date.now());
       }

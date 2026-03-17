@@ -7,7 +7,6 @@ import type {
   HourlyForecast,
   DailyForecast,
   WeatherConditions,
-  TrackCondition,
 } from '@/types/weather';
 import {
   getWeatherDescription,

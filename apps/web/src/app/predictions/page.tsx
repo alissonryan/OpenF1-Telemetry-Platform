@@ -9,7 +9,7 @@ import PositionForecastTable from '@/components/predictions/PositionForecastTabl
 import StrategyRecommendations from '@/components/predictions/StrategyRecommendations';
 import ConnectionStatus from '@/components/ui/ConnectionStatus';
 import PageHeader from '@/components/ui/PageHeader';
-import { EmptyState, StatCard, Surface } from '@/components/ui/Surface';
+import { EmptyState, StatCard, Surface, Badge } from '@/components/ui/Surface';
 import { usePredictions } from '@/hooks/usePredictions';
 import { apiFetch, ApiError } from '@/lib/api';
 import { getDriverDisplayName } from '@/lib/driver';
@@ -33,6 +33,13 @@ const tabs = [
   { id: 'positions' as const, label: 'Position Drift', icon: 'Pos' },
   { id: 'strategy' as const, label: 'Strategy', icon: 'Str' },
 ];
+
+const getBadgeTone = (mode: string) => {
+  if (mode === 'trained_model') return 'success';
+  if (mode === 'heuristic_fallback') return 'warning';
+  if (mode === 'rule_based') return 'info';
+  return 'default';
+};
 
 export default function PredictionsPage() {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
@@ -186,18 +193,30 @@ export default function PredictionsPage() {
         <div className="panel-grid">
           <StatCard
             label="Mode"
-            value={modelStatus?.overall_mode || 'Unknown'}
+            value={
+              <Badge tone={getBadgeTone(modelStatus?.overall_mode || '')}>
+                {modelStatus?.overall_mode || 'Unknown'}
+              </Badge>
+            }
             helper="Overall prediction runtime mode"
             tone="accent"
           />
           <StatCard
             label="Pit Engine"
-            value={String(modelStatus?.pit_predictor?.mode || 'unknown')}
+            value={
+              <Badge tone={getBadgeTone(String(modelStatus?.pit_predictor?.mode || ''))}>
+                {String(modelStatus?.pit_predictor?.mode || 'unknown')}
+              </Badge>
+            }
             helper="Trained model or heuristic fallback"
           />
           <StatCard
             label="Position Engine"
-            value={String(modelStatus?.position_forecaster?.mode || 'unknown')}
+            value={
+              <Badge tone={getBadgeTone(String(modelStatus?.position_forecaster?.mode || ''))}>
+                {String(modelStatus?.position_forecaster?.mode || 'unknown')}
+              </Badge>
+            }
             helper="Trained model or heuristic fallback"
             tone="warning"
           />
@@ -227,6 +246,11 @@ export default function PredictionsPage() {
           <EmptyState
             title="Select a session to start generating predictions"
             description="Once a live session is selected, the page resolves the current driver roster, computes the live context and starts polling plus WebSocket updates for prediction bundles."
+            icon={
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            }
           />
         ) : null}
 
@@ -308,6 +332,11 @@ export default function PredictionsPage() {
                       <EmptyState
                         title="No pit predictions yet"
                         description="Keep at least one driver selected. The pit list fills as soon as the live prediction context resolves."
+                        icon={
+                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        }
                       />
                     ) : (
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

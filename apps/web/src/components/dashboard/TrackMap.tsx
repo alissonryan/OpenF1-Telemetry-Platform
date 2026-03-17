@@ -9,11 +9,8 @@ import {
   getTrackByKey,
   getTrackByName,
   getPositionOnTrack,
-  getSectorForProgress,
-  isInDRSZone,
   DEFAULT_TRACK,
 } from '@/lib/trackData';
-import { tracks as allTracks, getTrackById, getTrackByName as getTrackByNameNew } from '@/lib/allTracks';
 
 // ==================== Types ====================
 
@@ -375,7 +372,6 @@ export default function TrackMap({
 }: TrackMapProps) {
   const [hoveredDriver, setHoveredDriver] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   // Determine which track to use - always return a valid track (fallback to DEFAULT_TRACK)
   const currentTrack: TrackData = useMemo(() => {
@@ -470,8 +466,7 @@ export default function TrackMap({
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        setDimensions({ width, height });
+        // Dimensions kept track by container internally if needed in future
       }
     };
 

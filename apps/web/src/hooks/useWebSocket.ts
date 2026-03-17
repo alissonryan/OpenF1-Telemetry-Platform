@@ -16,7 +16,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'err
 
 export interface WebSocketMessage {
   type: string;
-  data?: any;
+  data?: unknown;
   timestamp?: number;
   driver_number?: number;
   message?: string;
@@ -183,9 +183,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           if (message.data) {
             setPitStops((prev) => {
               const updated = new Map(prev);
-              const pitData = message.data;
+              const pitData = message.data as Record<string, unknown>;
               if (pitData.driver_number) {
-                updated.set(pitData.driver_number, pitData);
+                updated.set(pitData.driver_number as number, pitData as unknown as PitStopData);
               } else if (typeof pitData === 'object') {
                 // Handle object with driver numbers as keys
                 Object.entries(pitData).forEach(([driverNum, data]) => {
@@ -212,20 +212,20 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           break;
 
         case 'subscribed':
-          console.log('Subscribed:', message);
+          // console.log('Subscribed:', message);
           break;
 
         case 'unsubscribed':
-          console.log('Unsubscribed:', message);
+          // console.log('Unsubscribed:', message);
           break;
 
         case 'error':
           setError(message.message || 'Unknown error');
-          console.error('WebSocket error:', message.message);
+          // console.error('WebSocket error:', message.message);
           break;
 
         default:
-          console.log('Unknown message type:', message.type);
+          // console.log('Unknown message type:', message.type);
       }
 
       // Call custom message handler
@@ -250,7 +250,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        // console.log('WebSocket connected');
         setConnectionState('connected');
         setError(null);
         reconnectCountRef.current = 0;
@@ -260,8 +260,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
       ws.onmessage = handleMessage;
 
-      ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
+      ws.onclose = () => {
+        // console.log('WebSocket closed:', event.code, event.reason);
         setConnectionState('disconnected');
         onDisconnect?.();
 
@@ -271,7 +271,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           reconnectCountRef.current < reconnectAttempts
         ) {
           const interval = getBackoffInterval();
-          console.log(`Reconnecting in ${interval}ms (attempt ${reconnectCountRef.current + 1}/${reconnectAttempts})`);
+          // console.log(`Reconnecting in ${interval}ms (attempt ${reconnectCountRef.current + 1}/${reconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectCountRef.current++;
@@ -284,7 +284,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       };
 
       ws.onerror = (event) => {
-        console.error('WebSocket error:', event);
+        // console.error('WebSocket error:', event);
         setError('Connection error');
         setConnectionState('error');
         onError?.(event);

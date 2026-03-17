@@ -12,14 +12,21 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { motion } from 'framer-motion';
+import type { Driver } from '@/stores/f1Store';
+import type { TelemetryData } from '@/hooks/useWebSocket';
+
+interface ChartPoint extends Omit<TelemetryData, 'date'> {
+  date: string | Date;
+  time: number;
+  driverNumber: number;
+}
 
 interface TelemetryChartProps {
   title: string;
-  data: Map<number, any[]>;
-  dataKey: string;
-  color: string;
+  data: Map<number, TelemetryData[]>;
+  dataKey: keyof TelemetryData | string;
   selectedDrivers: number[];
-  drivers: any[];
+  drivers: Driver[];
 }
 
 const DRIVER_COLORS = [
@@ -39,7 +46,6 @@ export default function TelemetryChart({
   title,
   data,
   dataKey,
-  color,
   selectedDrivers,
   drivers,
 }: TelemetryChartProps) {
@@ -47,8 +53,7 @@ export default function TelemetryChart({
   const chartData = useMemo(() => {
     if (selectedDrivers.length === 0) return [];
 
-    // Get all data points from all drivers
-    const allPoints: any[] = [];
+    const allPoints: ChartPoint[] = [];
     selectedDrivers.forEach((driverNumber) => {
       const driverData = data.get(driverNumber) || [];
       driverData.forEach((point) => {
@@ -64,16 +69,16 @@ export default function TelemetryChart({
     allPoints.sort((a, b) => a.time - b.time);
 
     // Group by time buckets (100ms intervals)
-    const timeBuckets = new Map<number, any>();
+    const timeBuckets = new Map<number, Record<string, unknown>>();
     allPoints.forEach((point) => {
       const bucketTime = Math.floor(point.time / 100) * 100;
       const existing = timeBuckets.get(bucketTime) || { time: bucketTime };
-      existing[`driver_${point.driverNumber}`] = point[dataKey];
+      existing[`driver_${point.driverNumber}`] = point[dataKey as keyof ChartPoint];
       timeBuckets.set(bucketTime, existing);
     });
 
     return Array.from(timeBuckets.values())
-      .sort((a, b) => a.time - b.time)
+      .sort((a, b) => (a.time as number) - (b.time as number))
       .slice(-50); // Last 50 data points
   }, [data, selectedDrivers, dataKey]);
 

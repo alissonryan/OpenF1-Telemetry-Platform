@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface Session {
+export interface Session {
   meeting_key: number;
   session_key: number;
   session_name: string;
@@ -12,15 +12,17 @@ interface Session {
   date_end: string;
 }
 
-interface Driver {
+export interface Driver {
   driver_number: number;
-  name_acronym: string;
-  first_name: string;
-  last_name: string;
-  team_name: string;
-  team_colour: string;
-  country_code: string;
+  name_acronym?: string;
+  first_name?: string;
+  last_name?: string;
+  team_name?: string;
+  team_colour?: string;
+  country_code?: string;
 }
+
+import type { TelemetryData, PositionData } from '@/hooks/useWebSocket';
 
 interface F1State {
   // Session state
@@ -34,9 +36,9 @@ interface F1State {
   selectedDrivers: number[];
 
   // Telemetry state
-  telemetryData: Map<number, any[]>;
-  positions: any[];
-  laps: any[];
+  telemetryData: Map<number, TelemetryData[]>;
+  positions: PositionData[];
+  laps: Record<string, unknown>[];
 
   // UI state
   isLoading: boolean;
@@ -50,9 +52,9 @@ interface F1State {
   setDrivers: (drivers: Driver[]) => void;
   setSelectedDrivers: (driverNumbers: number[]) => void;
   toggleDriver: (driverNumber: number) => void;
-  setTelemetryData: (data: Map<number, any[]>) => void;
-  setPositions: (positions: any[]) => void;
-  setLaps: (laps: any[]) => void;
+  setTelemetryData: (data: Map<number, TelemetryData[]>) => void;
+  setPositions: (positions: PositionData[]) => void;
+  setLaps: (laps: Record<string, unknown>[]) => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;

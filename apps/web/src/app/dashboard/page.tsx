@@ -406,7 +406,6 @@ export default function DashboardPage() {
                   title="Speed (km/h)"
                   data={telemetryData}
                   dataKey="speed"
-                  color="#e10600"
                   selectedDrivers={selectedDrivers}
                   drivers={drivers}
                 />
@@ -414,7 +413,6 @@ export default function DashboardPage() {
                   title="Throttle (%)"
                   data={telemetryData}
                   dataKey="throttle"
-                  color="#00d2be"
                   selectedDrivers={selectedDrivers}
                   drivers={drivers}
                 />
@@ -422,7 +420,6 @@ export default function DashboardPage() {
                   title="Gear"
                   data={telemetryData}
                   dataKey="gear"
-                  color="#ff8700"
                   selectedDrivers={selectedDrivers}
                   drivers={drivers}
                 />
@@ -430,7 +427,6 @@ export default function DashboardPage() {
                   title="RPM"
                   data={telemetryData}
                   dataKey="rpm"
-                  color="#871aff"
                   selectedDrivers={selectedDrivers}
                   drivers={drivers}
                 />

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '@/components/layout/Layout';
 import PageHeader from '@/components/ui/PageHeader';
-import { EmptyState, StatCard, Surface } from '@/components/ui/Surface';
+import { EmptyState, StatCard, Surface, Badge } from '@/components/ui/Surface';
 import { apiFetch, ApiError } from '@/lib/api';
 
 interface ModelStatusPayload {
@@ -42,6 +42,13 @@ const integrations = [
   },
 ];
 
+const getBadgeTone = (mode: string) => {
+  if (mode === 'trained_model') return 'success';
+  if (mode === 'heuristic_fallback') return 'warning';
+  if (mode === 'rule_based') return 'info';
+  return 'default';
+};
+
 export default function HelpPage() {
   const [modelStatus, setModelStatus] = useState<ModelStatusPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,24 +84,40 @@ export default function HelpPage() {
         <div className="panel-grid">
           <StatCard
             label="Prediction Mode"
-            value={modelStatus?.overall_mode || 'Unknown'}
+            value={
+              <Badge tone={getBadgeTone(modelStatus?.overall_mode || '')}>
+                {modelStatus?.overall_mode || 'Unknown'}
+              </Badge>
+            }
             helper="Overall runtime behavior of the prediction layer"
             tone="accent"
           />
           <StatCard
             label="Pit Predictor"
-            value={String(modelStatus?.pit_predictor?.mode || 'unknown')}
+            value={
+              <Badge tone={getBadgeTone(String(modelStatus?.pit_predictor?.mode || ''))}>
+                {String(modelStatus?.pit_predictor?.mode || 'unknown')}
+              </Badge>
+            }
             helper="Trained model or heuristic fallback"
           />
           <StatCard
             label="Position Model"
-            value={String(modelStatus?.position_forecaster?.mode || 'unknown')}
+            value={
+              <Badge tone={getBadgeTone(String(modelStatus?.position_forecaster?.mode || ''))}>
+                {String(modelStatus?.position_forecaster?.mode || 'unknown')}
+              </Badge>
+            }
             helper="Trained model or heuristic fallback"
             tone="warning"
           />
           <StatCard
             label="Strategy Engine"
-            value={String(modelStatus?.strategy_recommender?.mode || 'rule_based')}
+            value={
+              <Badge tone={getBadgeTone(String(modelStatus?.strategy_recommender?.mode || 'rule_based'))}>
+                {String(modelStatus?.strategy_recommender?.mode || 'rule_based')}
+              </Badge>
+            }
             helper="Rule-based strategy analysis"
             tone="success"
           />

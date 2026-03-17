@@ -43,7 +43,7 @@ export function Surface({
 
 interface StatCardProps {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   helper?: string;
   tone?: 'default' | 'accent' | 'success' | 'warning';
 }
@@ -81,16 +81,50 @@ interface EmptyStateProps {
   title: string;
   description: string;
   action?: React.ReactNode;
+  icon?: React.ReactNode;
 }
 
-export function EmptyState({ title, description, action }: EmptyStateProps) {
+export function EmptyState({ title, description, action, icon }: EmptyStateProps) {
   return (
-    <div className="rounded-[20px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-10 text-center">
+    <div className="flex flex-col items-center justify-center rounded-[20px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-12 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-slate-400">
+        {icon || (
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+          </svg>
+        )}
+      </div>
       <p className="text-lg font-medium text-white">{title}</p>
       <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-400">
         {description}
       </p>
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
     </div>
+  );
+}
+
+export function Badge({
+  children,
+  tone = 'default',
+}: {
+  children: React.ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'info';
+}) {
+  const toneClasses = {
+    default: 'bg-white/10 text-white border-white/20',
+    success: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    warning: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    info: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  };
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold',
+        toneClasses[tone]
+      )}
+    >
+      {children}
+    </span>
   );
 }

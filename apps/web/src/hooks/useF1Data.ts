@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-interface UseF1DataOptions<T> {
+interface UseF1DataOptions {
   endpoint: string;
   params?: Record<string, string | number | boolean | null | undefined>;
   enabled?: boolean;
@@ -14,7 +14,7 @@ export function useF1Data<T>({
   params = {},
   enabled = true,
   refetchInterval,
-}: UseF1DataOptions<T>) {
+}: UseF1DataOptions) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [isLoading, setIsLoading] = useState(false);
