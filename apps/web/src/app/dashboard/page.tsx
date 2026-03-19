@@ -359,6 +359,14 @@ export default function DashboardPage() {
                         driver={driver}
                         isSelected={selectedDrivers.includes(driver.driver_number)}
                         onToggle={() => handleDriverToggle(driver.driver_number)}
+                        position={positions.find(p => p.driver_number === driver.driver_number)?.position}
+                        gap={
+                          (() => {
+                            const iv = intervals.find(i => i.driver_number === driver.driver_number);
+                            if (!iv || iv.gap_to_leader == null) return undefined;
+                            return iv.gap_to_leader === 0 ? 'Leader' : `+${iv.gap_to_leader.toFixed(3)}s`;
+                          })()
+                        }
                       />
                     </motion.div>
                   ))}

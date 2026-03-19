@@ -22,6 +22,9 @@ interface SimpleDriverCardProps {
   driver: SimpleDriver;
   isSelected?: boolean;
   onToggle?: () => void;
+  position?: number;
+  gap?: string;
+  lastLap?: string;
 }
 
 const teamColors: Record<string, string> = {
@@ -43,6 +46,9 @@ export default function SimpleDriverCard({
   driver,
   isSelected = false,
   onToggle,
+  position,
+  gap,
+  lastLap,
 }: SimpleDriverCardProps) {
   const teamColor = teamColors[driver.team_name] || `#${driver.team_colour}` || '#666666';
   const driverName = getDriverDisplayName(driver);
@@ -69,7 +75,17 @@ export default function SimpleDriverCard({
       />
 
       <div className="p-4 pl-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {/* Position */}
+          {position !== undefined && (
+            <div
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md font-mono text-lg font-bold"
+              style={{ backgroundColor: `${teamColor}20`, color: teamColor }}
+            >
+              {position}
+            </div>
+          )}
+
           {/* Driver number and name */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -87,6 +103,13 @@ export default function SimpleDriverCard({
               {driverName}
             </p>
             <p className="text-xs text-gray-500">{driver.team_name}</p>
+            {/* Gap and last lap */}
+            {(gap || lastLap) && (
+              <div className="mt-1 flex items-center gap-3 font-mono text-[11px] text-gray-400">
+                {gap && <span title="Gap to leader">{gap}</span>}
+                {lastLap && <span title="Last lap time" className="text-gray-500">{lastLap}</span>}
+              </div>
+            )}
           </div>
 
           {/* Driver headshot */}

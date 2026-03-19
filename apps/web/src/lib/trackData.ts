@@ -1,9 +1,11 @@
 /**
  * Track data for F1 circuits.
- * 
+ *
  * Coordinates are normalized to a 0-1000 scale for consistent rendering.
- * Real coordinates from OpenF1 API are in 1/10 meter units.
+ * Built from the comprehensive allTracks.ts library (f1-circuits).
  */
+
+import { tracks as allTracksRaw, TrackData as AllTrackData } from './allTracks';
 
 export interface TrackSector {
   start: number; // Index of the starting point
@@ -31,6 +33,128 @@ export interface TrackData {
   direction: 'clockwise' | 'counterclockwise';
 }
 
+// ==================== Sector Colors ====================
+
+const SECTOR_COLORS = ['#00d2be', '#ff8700', '#e10600'];
+
+// ==================== Country Code to Country Name ====================
+
+const COUNTRY_MAP: Record<string, string> = {
+  AUS: 'Australia',
+  BRN: 'Bahrain',
+  KSA: 'Saudi Arabia',
+  AZE: 'Azerbaijan',
+  USA: 'United States',
+  MON: 'Monaco',
+  ESP: 'Spain',
+  CAN: 'Canada',
+  GBR: 'Great Britain',
+  HUN: 'Hungary',
+  BEL: 'Belgium',
+  NED: 'Netherlands',
+  ITA: 'Italy',
+  SGP: 'Singapore',
+  JPN: 'Japan',
+  QAT: 'Qatar',
+  MEX: 'Mexico',
+  BRA: 'Brazil',
+  UAE: 'United Arab Emirates',
+  CHN: 'China',
+  AUT: 'Austria',
+  FRA: 'France',
+};
+
+// ==================== Location Aliases ====================
+// Maps OpenF1 meeting locations / common names to allTracks location or name
+
+const LOCATION_ALIASES: Record<string, string> = {
+  // OpenF1 location -> allTracks location/name (lowercased for matching)
+  'sakhir': 'sakhir',
+  'bahrain': 'sakhir',
+  'jeddah': 'jeddah',
+  'saudi arabia': 'jeddah',
+  'melbourne': 'melbourne',
+  'australia': 'melbourne',
+  'albert park': 'melbourne',
+  'baku': 'baku',
+  'azerbaijan': 'baku',
+  'miami': 'miami',
+  'imola': 'imola',
+  'emilia romagna': 'imola',
+  'monaco': 'monaco',
+  'monte carlo': 'monaco',
+  'monte-carlo': 'monaco',
+  'barcelona': 'barcelona',
+  'spain': 'barcelona',
+  'catalunya': 'barcelona',
+  'montreal': 'montreal',
+  'canada': 'montreal',
+  'silverstone': 'silverstone',
+  'great britain': 'silverstone',
+  'britain': 'silverstone',
+  'spielberg': 'spielberg',
+  'austria': 'spielberg',
+  'red bull ring': 'spielberg',
+  'budapest': 'budapest',
+  'hungary': 'budapest',
+  'hungaroring': 'budapest',
+  'spa': 'spa francorchamps',
+  'spa-francorchamps': 'spa francorchamps',
+  'spa francorchamps': 'spa francorchamps',
+  'belgium': 'spa francorchamps',
+  'zandvoort': 'zandvoort',
+  'netherlands': 'zandvoort',
+  'dutch': 'zandvoort',
+  'monza': 'monza',
+  'italy': 'monza',
+  'singapore': 'singapore',
+  'marina bay': 'singapore',
+  'suzuka': 'suzuka',
+  'japan': 'suzuka',
+  'lusail': 'lusail',
+  'qatar': 'lusail',
+  'austin': 'austin',
+  'cota': 'austin',
+  'united states': 'austin',
+  'mexico city': 'mexico city',
+  'mexico': 'mexico city',
+  'sao paulo': 'sao paulo',
+  'são paulo': 'sao paulo',
+  'brazil': 'sao paulo',
+  'interlagos': 'sao paulo',
+  'las vegas': 'las vegas',
+  'yas marina': 'yas marina',
+  'abu dhabi': 'yas marina',
+  'shanghai': 'shanghai',
+  'china': 'shanghai',
+  'le castellet': 'le castellet',
+  'paul ricard': 'le castellet',
+  'france': 'le castellet',
+  'hockenheim': 'hockenheim',
+  'hockenheimring': 'hockenheim',
+  'germany': 'hockenheim',
+  'nürburgring': 'nürburg',
+  'nurburgring': 'nürburg',
+  'portimão': 'portimão',
+  'portimao': 'portimão',
+  'portugal': 'portimão',
+  'algarve': 'portimão',
+  'istanbul': 'istanbul',
+  'turkey': 'istanbul',
+  'sochi': 'sochi',
+  'russia': 'sochi',
+  'sepang': 'sepang',
+  'malaysia': 'sepang',
+  'mugello': 'scarperia e san piero',
+  'johannesburg': 'johannesburg',
+  'south africa': 'johannesburg',
+  'kyalami': 'johannesburg',
+  'madrid': 'madrid',
+  'indianapolis': 'indianapolis',
+};
+
+// ==================== Coordinate Normalization ====================
+
 /**
  * Normalize coordinates to 0-1000 scale
  */
@@ -41,235 +165,54 @@ function normalizeCoords(coords: { x: number; y: number }[]): { x: number; y: nu
   const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
   const maxY = Math.max(...ys);
-  
+
   const rangeX = maxX - minX || 1;
   const rangeY = maxY - minY || 1;
-  
+
   return coords.map(c => ({
     x: Math.round(((c.x - minX) / rangeX) * 900 + 50),
     y: Math.round(((c.y - minY) / rangeY) * 900 + 50),
   }));
 }
 
-// Bahrain International Circuit (Sakhir)
-const bahrain_coords = normalizeCoords([
-  { x: 100, y: 200 },
-  { x: 150, y: 150 },
-  { x: 250, y: 120 },
-  { x: 350, y: 100 },
-  { x: 450, y: 120 },
-  { x: 550, y: 150 },
-  { x: 650, y: 180 },
-  { x: 700, y: 220 },
-  { x: 730, y: 280 },
-  { x: 700, y: 350 },
-  { x: 650, y: 400 },
-  { x: 580, y: 450 },
-  { x: 500, y: 500 },
-  { x: 420, y: 530 },
-  { x: 350, y: 550 },
-  { x: 280, y: 520 },
-  { x: 220, y: 480 },
-  { x: 180, y: 420 },
-  { x: 150, y: 350 },
-  { x: 120, y: 280 },
-  { x: 100, y: 200 },
-]);
-
-// Jeddah Corniche Circuit (Saudi Arabia)
-const jeddah_coords = normalizeCoords([
-  { x: 100, y: 300 },
-  { x: 150, y: 250 },
-  { x: 200, y: 200 },
-  { x: 280, y: 150 },
-  { x: 380, y: 120 },
-  { x: 500, y: 100 },
-  { x: 600, y: 130 },
-  { x: 680, y: 180 },
-  { x: 720, y: 250 },
-  { x: 700, y: 320 },
-  { x: 650, y: 380 },
-  { x: 580, y: 420 },
-  { x: 500, y: 440 },
-  { x: 420, y: 420 },
-  { x: 380, y: 380 },
-  { x: 350, y: 320 },
-  { x: 300, y: 280 },
-  { x: 250, y: 300 },
-  { x: 200, y: 340 },
-  { x: 150, y: 350 },
-  { x: 100, y: 300 },
-]);
-
-// Albert Park Circuit (Australia - Melbourne)
-const melbourne_coords = normalizeCoords([
-  { x: 200, y: 150 },
-  { x: 300, y: 120 },
-  { x: 400, y: 100 },
-  { x: 520, y: 130 },
-  { x: 620, y: 180 },
-  { x: 700, y: 250 },
-  { x: 720, y: 340 },
-  { x: 680, y: 420 },
-  { x: 600, y: 480 },
-  { x: 500, y: 520 },
-  { x: 400, y: 540 },
-  { x: 300, y: 520 },
-  { x: 220, y: 470 },
-  { x: 160, y: 400 },
-  { x: 140, y: 320 },
-  { x: 160, y: 240 },
-  { x: 200, y: 150 },
-]);
-
-// Circuit de Monaco
-const monaco_coords = normalizeCoords([
-  { x: 250, y: 100 },
-  { x: 350, y: 80 },
-  { x: 450, y: 100 },
-  { x: 520, y: 150 },
-  { x: 560, y: 220 },
-  { x: 540, y: 300 },
-  { x: 480, y: 360 },
-  { x: 400, y: 400 },
-  { x: 350, y: 450 },
-  { x: 320, y: 520 },
-  { x: 280, y: 580 },
-  { x: 220, y: 600 },
-  { x: 160, y: 560 },
-  { x: 140, y: 480 },
-  { x: 160, y: 400 },
-  { x: 200, y: 320 },
-  { x: 180, y: 250 },
-  { x: 200, y: 180 },
-  { x: 250, y: 100 },
-]);
-
-// Silverstone Circuit (Great Britain)
-const silverstone_coords = normalizeCoords([
-  { x: 300, y: 600 },
-  { x: 250, y: 520 },
-  { x: 200, y: 440 },
-  { x: 180, y: 350 },
-  { x: 200, y: 260 },
-  { x: 260, y: 180 },
-  { x: 350, y: 120 },
-  { x: 450, y: 100 },
-  { x: 550, y: 130 },
-  { x: 640, y: 180 },
-  { x: 700, y: 260 },
-  { x: 720, y: 350 },
-  { x: 680, y: 440 },
-  { x: 600, y: 500 },
-  { x: 500, y: 530 },
-  { x: 400, y: 560 },
-  { x: 300, y: 600 },
-]);
+// ==================== Conversion ====================
 
 /**
- * Track data for all supported circuits
+ * Convert an allTracks entry to the TrackData format used by TrackMap
  */
-export const TRACKS: TrackData[] = [
-  {
-    circuit_key: 1,
-    name: 'Sakhir',
-    official_name: 'Bahrain International Circuit',
-    country: 'Bahrain',
-    location: 'Sakhir',
-    length_km: 5.412,
-    turns: 15,
-    sectors: [
-      { start: 0, end: 6, color: '#00d2be' },
-      { start: 6, end: 13, color: '#ff8700' },
-      { start: 13, end: 20, color: '#e10600' },
-    ],
-    coordinates: bahrain_coords,
-    drs_zones: [
-      { start: 10, end: 18, detectionPoint: 8 },
-      { start: 42, end: 52, detectionPoint: 38 },
-      { start: 70, end: 82, detectionPoint: 65 },
-    ],
+function convertTrack(source: AllTrackData, index: number): TrackData {
+  const country = COUNTRY_MAP[source.country_code] || source.country_code;
+
+  // Convert sectors and add default colors
+  const sectors: TrackSector[] = source.sectors.map((sector, i) => ({
+    start: sector.start,
+    end: sector.end,
+    color: SECTOR_COLORS[i % SECTOR_COLORS.length],
+  }));
+
+  return {
+    circuit_key: index + 1,
+    name: source.name,
+    official_name: source.name,
+    country,
+    location: source.location,
+    length_km: source.length_km,
+    turns: source.turns,
+    sectors,
+    coordinates: normalizeCoords(source.coordinates),
+    drs_zones: [],
     direction: 'clockwise',
-  },
-  {
-    circuit_key: 2,
-    name: 'Jeddah',
-    official_name: 'Jeddah Corniche Circuit',
-    country: 'Saudi Arabia',
-    location: 'Jeddah',
-    length_km: 6.174,
-    turns: 27,
-    sectors: [
-      { start: 0, end: 7, color: '#00d2be' },
-      { start: 7, end: 14, color: '#ff8700' },
-      { start: 14, end: 20, color: '#e10600' },
-    ],
-    coordinates: jeddah_coords,
-    drs_zones: [
-      { start: 18, end: 28, detectionPoint: 12 },
-      { start: 75, end: 88, detectionPoint: 70 },
-    ],
-    direction: 'clockwise',
-  },
-  {
-    circuit_key: 3,
-    name: 'Melbourne',
-    official_name: 'Albert Park Circuit',
-    country: 'Australia',
-    location: 'Melbourne',
-    length_km: 5.278,
-    turns: 14,
-    sectors: [
-      { start: 0, end: 5, color: '#00d2be' },
-      { start: 5, end: 11, color: '#ff8700' },
-      { start: 11, end: 16, color: '#e10600' },
-    ],
-    coordinates: melbourne_coords,
-    drs_zones: [
-      { start: 12, end: 22, detectionPoint: 8 },
-      { start: 65, end: 78, detectionPoint: 60 },
-    ],
-    direction: 'clockwise',
-  },
-  {
-    circuit_key: 4,
-    name: 'Monaco',
-    official_name: 'Circuit de Monaco',
-    country: 'Monaco',
-    location: 'Monte Carlo',
-    length_km: 3.337,
-    turns: 19,
-    sectors: [
-      { start: 0, end: 6, color: '#00d2be' },
-      { start: 6, end: 12, color: '#ff8700' },
-      { start: 12, end: 18, color: '#e10600' },
-    ],
-    coordinates: monaco_coords,
-    drs_zones: [], // No DRS zones at Monaco
-    direction: 'clockwise',
-  },
-  {
-    circuit_key: 5,
-    name: 'Silverstone',
-    official_name: 'Silverstone Circuit',
-    country: 'Great Britain',
-    location: 'Silverstone',
-    length_km: 5.891,
-    turns: 18,
-    sectors: [
-      { start: 0, end: 5, color: '#00d2be' },
-      { start: 5, end: 11, color: '#ff8700' },
-      { start: 11, end: 16, color: '#e10600' },
-    ],
-    coordinates: silverstone_coords,
-    drs_zones: [
-      { start: 5, end: 15, detectionPoint: 2 },
-      { start: 50, end: 62, detectionPoint: 45 },
-      { start: 82, end: 92, detectionPoint: 78 },
-    ],
-    direction: 'clockwise',
-  },
-];
+  };
+}
+
+// ==================== Build TRACKS ====================
+
+/**
+ * Track data for all supported circuits, built from allTracks.ts
+ */
+export const TRACKS: TrackData[] = allTracksRaw.map((t, i) => convertTrack(t, i));
+
+// ==================== Lookup Functions ====================
 
 /**
  * Get track data by circuit key
@@ -279,17 +222,69 @@ export function getTrackByKey(circuitKey: number): TrackData | undefined {
 }
 
 /**
- * Get track data by circuit name
+ * Resolve a location alias to the canonical allTracks location (lowercased)
+ */
+function resolveAlias(input: string): string | undefined {
+  return LOCATION_ALIASES[input.toLowerCase()];
+}
+
+/**
+ * Get track data by circuit name with fuzzy matching.
+ *
+ * Matching strategy (in order of priority):
+ * 1. Exact match on location or name (case-insensitive)
+ * 2. Known alias mapping (e.g. "Sakhir" -> Bahrain, "Melbourne" -> Albert Park)
+ * 3. Substring match on name or location
+ * 4. Word-boundary match (any word in the query appears in name/location)
  */
 export function getTrackByName(name: string): TrackData | undefined {
-  const normalizedName = name.toLowerCase();
-  return TRACKS.find(
-    track => 
-      track.name.toLowerCase() === normalizedName ||
-      track.official_name.toLowerCase().includes(normalizedName) ||
-      track.location.toLowerCase() === normalizedName
+  if (!name) return undefined;
+
+  const query = name.toLowerCase().trim();
+
+  // 1. Exact match on location or name
+  const exact = TRACKS.find(
+    t =>
+      t.location.toLowerCase() === query ||
+      t.name.toLowerCase() === query ||
+      t.official_name.toLowerCase() === query
   );
+  if (exact) return exact;
+
+  // 2. Alias mapping
+  const aliasTarget = resolveAlias(query);
+  if (aliasTarget) {
+    const aliased = TRACKS.find(
+      t =>
+        t.location.toLowerCase() === aliasTarget ||
+        t.name.toLowerCase().includes(aliasTarget)
+    );
+    if (aliased) return aliased;
+  }
+
+  // 3. Substring match — query appears within name or location
+  const substring = TRACKS.find(
+    t =>
+      t.name.toLowerCase().includes(query) ||
+      t.location.toLowerCase().includes(query) ||
+      t.official_name.toLowerCase().includes(query)
+  );
+  if (substring) return substring;
+
+  // 4. Word-boundary match — any query word (3+ chars) appears in name/location
+  const words = query.split(/\s+/).filter(w => w.length >= 3);
+  if (words.length > 0) {
+    const wordMatch = TRACKS.find(t => {
+      const haystack = `${t.name} ${t.location} ${t.official_name}`.toLowerCase();
+      return words.some(w => haystack.includes(w));
+    });
+    if (wordMatch) return wordMatch;
+  }
+
+  return undefined;
 }
+
+// ==================== Track Utility Functions ====================
 
 /**
  * Calculate the distance percentage along the track for a given position
@@ -379,6 +374,6 @@ export function isInDRSZone(
 }
 
 /**
- * Default track (Bahrain)
+ * Default track (first track — Albert Park Circuit)
  */
 export const DEFAULT_TRACK = TRACKS[0];
