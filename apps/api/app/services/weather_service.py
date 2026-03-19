@@ -248,31 +248,45 @@ class WeatherService:
         Returns:
             Dictionary with circuit weather data
         """
-        # Circuit coordinates database
+        # Circuit coordinates database (including common aliases)
         circuits = {
             "Sakhir": {"lat": 26.032, "lon": 50.511},
+            "Bahrain": {"lat": 26.032, "lon": 50.511},
             "Jeddah": {"lat": 21.632, "lon": 39.104},
             "Melbourne": {"lat": -37.849, "lon": 144.968},
+            "Albert Park": {"lat": -37.849, "lon": 144.968},
+            "Shanghai": {"lat": 31.339, "lon": 121.220},
+            "Suzuka": {"lat": 34.843, "lon": 136.539},
             "Imola": {"lat": 44.341, "lon": 11.713},
             "Miami": {"lat": 25.957, "lon": -80.239},
             "Barcelona": {"lat": 41.569, "lon": 2.259},
+            "Catalunya": {"lat": 41.569, "lon": 2.259},
             "Monaco": {"lat": 43.734, "lon": 7.421},
+            "Monte Carlo": {"lat": 43.734, "lon": 7.421},
+            "Montreal": {"lat": 45.500, "lon": -73.522},
             "Baku": {"lat": 40.369, "lon": 49.842},
             "Silverstone": {"lat": 52.073, "lon": -1.017},
             "Spielberg": {"lat": 47.222, "lon": 14.765},
             "Le Castellet": {"lat": 43.456, "lon": 5.789},
             "Budapest": {"lat": 47.583, "lon": 19.250},
+            "Hungaroring": {"lat": 47.583, "lon": 19.250},
             "Spa": {"lat": 50.437, "lon": 5.971},
+            "Spa-Francorchamps": {"lat": 50.437, "lon": 5.971},
             "Zandvoort": {"lat": 52.389, "lon": 4.545},
             "Monza": {"lat": 45.621, "lon": 9.290},
             "Singapore": {"lat": 1.291, "lon": 103.864},
-            "Suzuka": {"lat": 34.843, "lon": 136.539},
+            "Marina Bay": {"lat": 1.291, "lon": 103.864},
             "Austin": {"lat": 30.135, "lon": -97.633},
             "Mexico City": {"lat": 19.404, "lon": -99.091},
             "Sao Paulo": {"lat": -23.702, "lon": -46.698},
+            "Interlagos": {"lat": -23.702, "lon": -46.698},
             "Las Vegas": {"lat": 36.115, "lon": -115.173},
             "Abu Dhabi": {"lat": 24.467, "lon": 54.603},
+            "Yas Marina": {"lat": 24.467, "lon": 54.603},
+            "Yas Marina Circuit": {"lat": 24.467, "lon": 54.603},
             "Lusail": {"lat": 25.493, "lon": 51.454},
+            "Madring": {"lat": 40.447, "lon": -3.688},
+            "Madrid": {"lat": 40.447, "lon": -3.688},
         }
 
         # Get coordinates
