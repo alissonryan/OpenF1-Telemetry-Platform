@@ -2,11 +2,15 @@
 Feature engineering for ML models.
 """
 
-from typing import Dict, List, Optional
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from fastf1.core import Session
+
+if TYPE_CHECKING:
+    from fastf1.core import Session
 
 
 class FeatureEngineer:
@@ -14,7 +18,7 @@ class FeatureEngineer:
 
     def extract_race_features(
         self,
-        session: Session,
+        session: "Session",
         driver: str,
         lap_number: int,
     ) -> Dict[str, float]:

@@ -97,7 +97,7 @@ class TelemetryListResponse(BaseModel):
 class PositionResponse(CarDataBase):
     """Driver position data response model (track coordinates)."""
 
-    position: int = Field(..., ge=1, le=20, description="Race position")
+    position: Optional[int] = Field(None, ge=1, le=25, description="Race position")
     x: float = Field(..., description="X coordinate on track")
     y: float = Field(..., description="Y coordinate on track")
     z: float = Field(..., description="Z coordinate (elevation)")

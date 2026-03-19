@@ -4,7 +4,7 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
@@ -17,7 +17,7 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
@@ -25,6 +25,7 @@ services:
       - FASTF1_CACHE_DIR=/app/data/cache/fastf1
     volumes:
       - ./data/cache:/app/data/cache
+      - ./data/f1db:/app/data/f1db
       - ./packages/ml-models:/app/packages/ml-models
     networks:
       - f1-network

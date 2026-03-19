@@ -15,10 +15,17 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { getDriverDisplayName } from '@/lib/driver';
 import type {
   DriverPositionForecast,
+  HistoricalAccuracy,
   PitPrediction,
   StrategyAnalysis,
 } from '@/types/predictions';
 import type { Driver } from '@/types/telemetry';
+
+interface FeatureImportance {
+  feature: string;
+  importance: number;
+  model: string;
+}
 
 interface ModelStatusPayload {
   pit_predictor: Record<string, unknown>;
@@ -32,6 +39,8 @@ const tabs = [
   { id: 'pit' as const, label: 'Pit Window', icon: 'Pit' },
   { id: 'positions' as const, label: 'Position Drift', icon: 'Pos' },
   { id: 'strategy' as const, label: 'Strategy', icon: 'Str' },
+  { id: 'explainability' as const, label: 'Explainability', icon: 'Exp' },
+  { id: 'accuracy' as const, label: 'Accuracy', icon: 'Acc' },
 ];
 
 const getBadgeTone = (mode: string) => {
@@ -46,8 +55,10 @@ export default function PredictionsPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<number[]>([]);
   const [activeTab, setActiveTab] =
-    useState<'pit' | 'positions' | 'strategy'>('pit');
+    useState<'pit' | 'positions' | 'strategy' | 'explainability' | 'accuracy'>('pit');
   const [modelStatus, setModelStatus] = useState<ModelStatusPayload | null>(null);
+  const [featureImportance, setFeatureImportance] = useState<FeatureImportance[]>([]);
+  const [modelAccuracy, setModelAccuracy] = useState<HistoricalAccuracy[]>([]);
   const [pageError, setPageError] = useState<string | null>(null);
 
   const {
@@ -85,6 +96,31 @@ export default function PredictionsPage() {
     };
 
     loadModelStatus();
+
+    const loadFeatureImportance = async () => {
+      try {
+        const payload = await apiFetch<FeatureImportance[]>(
+          '/api/predictions/models/feature-importance'
+        );
+        setFeatureImportance(payload);
+      } catch {
+        // Non-critical — silently ignore
+      }
+    };
+
+    const loadModelAccuracy = async () => {
+      try {
+        const payload = await apiFetch<HistoricalAccuracy[]>(
+          '/api/predictions/models/accuracy'
+        );
+        setModelAccuracy(payload);
+      } catch {
+        // Non-critical — silently ignore
+      }
+    };
+
+    loadFeatureImportance();
+    loadModelAccuracy();
   }, []);
 
   useEffect(() => {
@@ -390,6 +426,114 @@ export default function PredictionsPage() {
                       recommendations={selectedStrategies}
                       isLoading={isLoadingStrategy}
                     />
+                  </motion.div>
+                ) : null}
+                {activeTab === 'explainability' ? (
+                  <motion.div
+                    key="explainability"
+                    initial={{ opacity: 0, x: -18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 18 }}
+                    className="space-y-5"
+                  >
+                    {featureImportance.length === 0 ? (
+                      <EmptyState
+                        title="No feature importance data"
+                        description="Feature importance becomes available after models are trained."
+                        icon={
+                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        }
+                      />
+                    ) : (
+                      <div className="space-y-3">
+                        {featureImportance
+                          .sort((a, b) => b.importance - a.importance)
+                          .map((item) => {
+                            const maxImportance = featureImportance[0]
+                              ? Math.max(...featureImportance.map((f) => f.importance))
+                              : 1;
+                            const widthPercent = (item.importance / maxImportance) * 100;
+
+                            return (
+                              <div key={`${item.model}-${item.feature}`} className="space-y-1">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="font-medium text-white">{item.feature}</span>
+                                  <span className="flex items-center gap-2">
+                                    <Badge tone="info">{item.model}</Badge>
+                                    <span className="font-mono text-xs text-slate-400">
+                                      {(item.importance * 100).toFixed(1)}%
+                                    </span>
+                                  </span>
+                                </div>
+                                <div className="h-2 w-full rounded-full bg-white/[0.06]">
+                                  <div
+                                    className="h-2 rounded-full bg-f1-red transition-all"
+                                    style={{ width: `${widthPercent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </motion.div>
+                ) : null}
+
+                {activeTab === 'accuracy' ? (
+                  <motion.div
+                    key="accuracy"
+                    initial={{ opacity: 0, x: -18 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 18 }}
+                    className="space-y-5"
+                  >
+                    {modelAccuracy.length === 0 ? (
+                      <EmptyState
+                        title="No accuracy data available"
+                        description="Historical accuracy metrics appear after models have been evaluated against past races."
+                        icon={
+                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        }
+                      />
+                    ) : (
+                      modelAccuracy.map((model) => (
+                        <Surface
+                          key={model.model_name}
+                          title={model.model_name}
+                          subtitle={`Based on ${model.races_analyzed} races \u00b7 Updated ${new Date(model.last_updated).toLocaleDateString()}`}
+                        >
+                          <div className="panel-grid">
+                            <StatCard
+                              label="Accuracy"
+                              value={`${(model.accuracy * 100).toFixed(1)}%`}
+                              helper="Overall correct predictions"
+                              tone="accent"
+                            />
+                            <StatCard
+                              label="Precision"
+                              value={`${(model.precision * 100).toFixed(1)}%`}
+                              helper="True positives / predicted positives"
+                              tone="success"
+                            />
+                            <StatCard
+                              label="Recall"
+                              value={`${(model.recall * 100).toFixed(1)}%`}
+                              helper="True positives / actual positives"
+                              tone="warning"
+                            />
+                            <StatCard
+                              label="F1 Score"
+                              value={`${(model.f1_score * 100).toFixed(1)}%`}
+                              helper="Harmonic mean of precision and recall"
+                            />
+                          </div>
+                        </Surface>
+                      ))
+                    )}
                   </motion.div>
                 ) : null}
               </AnimatePresence>

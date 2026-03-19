@@ -62,8 +62,8 @@ class DriverPositionForecast(BaseModel):
     driver_number: int
     driver_name: Optional[str] = None
     team_name: Optional[str] = None
-    current_position: int = Field(..., ge=1, le=20)
-    predicted_position: int = Field(..., ge=1, le=20)
+    current_position: int = Field(..., ge=1, le=25)
+    predicted_position: int = Field(..., ge=1, le=25)
     position_change: int = Field(..., description="Positive = gained positions, negative = lost")
     confidence: float = Field(..., ge=0, le=1)
     factors: List[str] = Field(default_factory=list)

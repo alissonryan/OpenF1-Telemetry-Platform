@@ -499,12 +499,12 @@ class OpenF1Client:
         if date is not None:
             params["date"] = date
 
-        logger.info(f"Fetching positions with params: {params}")
-        data = await self._get("position", params)
+        logger.info(f"Fetching locations with params: {params}")
+        data = await self._get("location", params)
 
         # Apply client-side filter
         if position is not None:
-            data = [d for d in data if d.get("position") == position]
+            data = [d for d in data if d.get("position", 0) == position]
 
         return data
 

@@ -31,6 +31,11 @@ export const primaryNavigation: NavigationItem[] = [
     description: 'Circuit database, recent races and track weather',
   },
   {
+    href: '/fantasy',
+    label: 'Fantasy',
+    description: 'AI-powered team builder, predictions and value plays',
+  },
+  {
     href: '/historical',
     label: 'Historical',
     description: 'FastF1 session analysis with telemetry and comparisons',

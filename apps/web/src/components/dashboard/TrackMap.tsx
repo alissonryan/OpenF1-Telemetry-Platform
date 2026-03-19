@@ -119,13 +119,13 @@ function interpolateSpeedColor(speed: number): string {
 function normalizePosition(
   x: number,
   y: number,
-  viewBoxWidth: number,
-  viewBoxHeight: number
+  _viewBoxWidth: number,
+  _viewBoxHeight: number
 ): { x: number; y: number } {
-  // Assuming input coords are 0-1000 scale
+  // Directly return the coordinates because they are already 0-1000 scaled
   return {
-    x: (x / 1000) * viewBoxWidth,
-    y: (y / 1000) * viewBoxHeight,
+    x: x,
+    y: y,
   };
 }
 
@@ -528,7 +528,7 @@ export default function TrackMap({
 
       {/* SVG Track Map */}
       <svg
-        viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
+        viewBox={`0 0 1000 1000`}
         className="w-full h-full"
         style={{ 
           minHeight: sizeConfig.height, 

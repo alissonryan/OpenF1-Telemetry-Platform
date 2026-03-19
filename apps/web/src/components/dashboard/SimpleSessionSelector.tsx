@@ -156,9 +156,12 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <div className="flex-1">
-            <p className="text-xs text-gray-400">Meeting</p>
-            <p className="font-medium text-white">
-              {selectedMeeting?.meeting_name || 'Select Meeting'}
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-f1-red text-[10px] font-bold text-white">1</span>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Select Meeting</p>
+            </div>
+            <p className={cn("font-medium", selectedMeeting ? "text-white" : "text-gray-500")}>
+              {selectedMeeting?.meeting_name || 'Choose a race weekend...'}
             </p>
           </div>
           <motion.svg
@@ -229,9 +232,12 @@ export default function SimpleSessionSelector({ onSelect, className }: SimpleSes
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div className="flex-1">
-            <p className="text-xs text-gray-400">Session</p>
-            <p className="font-medium text-white">
-              {selectedSession?.session_name || 'Select Session'}
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className={cn("flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold text-white", selectedMeetingKey ? "bg-f1-red" : "bg-gray-600")}>2</span>
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Select Session</p>
+            </div>
+            <p className={cn("font-medium", selectedSession ? "text-white" : "text-gray-500")}>
+              {selectedSession?.session_name || 'Choose a session...'}
             </p>
           </div>
           <motion.svg

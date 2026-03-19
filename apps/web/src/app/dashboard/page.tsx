@@ -332,25 +332,38 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="mb-6"
+              className="mb-6 rounded-xl border border-white/5 bg-gray-900/50 p-6"
             >
-              <h2 className="mb-4 text-xl font-semibold text-white">Drivers</h2>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
-                {drivers.map((driver, index) => (
-                  <motion.div
-                    key={driver.driver_number}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                  >
-                    <SimpleDriverCard
-                      driver={driver}
-                      isSelected={selectedDrivers.includes(driver.driver_number)}
-                      onToggle={() => handleDriverToggle(driver.driver_number)}
-                    />
-                  </motion.div>
-                ))}
+              <div className="mb-4 flex items-center gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-f1-red text-xs font-bold text-white">3</span>
+                <h2 className="text-xl font-semibold text-white">Select Drivers to Track</h2>
               </div>
+              <p className="mb-6 text-sm text-gray-400">
+                Click on the drivers below to monitor their live telemetry and track position.
+              </p>
+              
+              {drivers.length === 0 ? (
+                 <div className="flex h-32 flex-col items-center justify-center rounded-lg border border-dashed border-gray-700 bg-gray-800/30 text-gray-400">
+                   <p>Loading drivers for this session...</p>
+                 </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-5">
+                  {drivers.map((driver, index) => (
+                    <motion.div
+                      key={driver.driver_number}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <SimpleDriverCard
+                        driver={driver}
+                        isSelected={selectedDrivers.includes(driver.driver_number)}
+                        onToggle={() => handleDriverToggle(driver.driver_number)}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </motion.div>
 
             {/* Live Data Indicator */}
@@ -372,66 +385,84 @@ export default function DashboardPage() {
             )}
 
             {/* Track Map, Weather and Telemetry Grid */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-              className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3"
-            >
-              {/* Track Map - Takes 1 column on large screens */}
-              <div className="lg:col-span-1 space-y-4">
-                <h2 className="text-xl font-semibold text-white">Track Map</h2>
-                <TrackMap
-                  circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
-                  positions={trackMapPositions}
-                  drivers={trackMapDrivers}
-                  selectedDrivers={selectedDrivers}
-                  onDriverClick={handleDriverClick}
-                  showDRSZones={true}
-                  showSectors={true}
-                  size="md"
-                  className="aspect-square"
-                />
-                {/* Weather Widget below Track Map */}
-                <WeatherWidget
-                  circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
-                  autoRefresh={true}
-                  compact={false}
-                />
-              </div>
-
-              {/* Telemetry Charts - Takes 2 columns on large screens */}
-              <div className="lg:col-span-2 grid grid-cols-1 gap-6 md:grid-cols-2">
-                <TelemetryChart
-                  title="Speed (km/h)"
-                  data={telemetryData}
-                  dataKey="speed"
-                  selectedDrivers={selectedDrivers}
-                  drivers={drivers}
-                />
-                <TelemetryChart
-                  title="Throttle (%)"
-                  data={telemetryData}
-                  dataKey="throttle"
-                  selectedDrivers={selectedDrivers}
-                  drivers={drivers}
-                />
-                <TelemetryChart
-                  title="Gear"
-                  data={telemetryData}
-                  dataKey="gear"
-                  selectedDrivers={selectedDrivers}
-                  drivers={drivers}
-                />
-                <TelemetryChart
-                  title="RPM"
-                  data={telemetryData}
-                  dataKey="rpm"
-                  selectedDrivers={selectedDrivers}
-                  drivers={drivers}
-                />
-              </div>
-            </motion.div>
+            {selectedDrivers.length > 0 ? (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3"
+              >
+                {/* Track Map - Takes 1 column on large screens */}
+                <div className="lg:col-span-1 space-y-4">
+                  <h2 className="text-xl font-semibold text-white">Track Map</h2>
+                  <TrackMap
+                    circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
+                    positions={trackMapPositions}
+                    drivers={trackMapDrivers}
+                    selectedDrivers={selectedDrivers}
+                    onDriverClick={handleDriverClick}
+                    showDRSZones={true}
+                    showSectors={true}
+                    size="md"
+                    className="aspect-square"
+                  />
+                  {/* Weather Widget below Track Map */}
+                  <WeatherWidget
+                    circuitName={sessionInfo?.circuit_short_name || sessionInfo?.location}
+                    autoRefresh={true}
+                    compact={false}
+                  />
+                </div>
+  
+                {/* Telemetry Charts - Takes 2 columns on large screens */}
+                <div className="lg:col-span-2 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <TelemetryChart
+                    title="Speed (km/h)"
+                    data={telemetryData}
+                    dataKey="speed"
+                    selectedDrivers={selectedDrivers}
+                    drivers={drivers}
+                  />
+                  <TelemetryChart
+                    title="Throttle (%)"
+                    data={telemetryData}
+                    dataKey="throttle"
+                    selectedDrivers={selectedDrivers}
+                    drivers={drivers}
+                  />
+                  <TelemetryChart
+                    title="Gear"
+                    data={telemetryData}
+                    dataKey="gear"
+                    selectedDrivers={selectedDrivers}
+                    drivers={drivers}
+                  />
+                  <TelemetryChart
+                    title="RPM"
+                    data={telemetryData}
+                    dataKey="rpm"
+                    selectedDrivers={selectedDrivers}
+                    drivers={drivers}
+                  />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="mb-6 flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-700 bg-gray-900/40 py-16 text-center"
+              >
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-800">
+                  <svg className="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-medium text-white">No Drivers Selected</h3>
+                <p className="mt-2 max-w-sm text-center text-sm text-gray-400">
+                  Select up to 4 drivers from the list above to view their live telemetry and track positions.
+                </p>
+              </motion.div>
+            )}
 
             {/* Leaderboard */}
             <motion.div
@@ -448,25 +479,29 @@ export default function DashboardPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex h-96 flex-col items-center justify-center text-gray-400"
+            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-700 bg-gray-900/40 px-6 py-24 text-center mt-8"
           >
-            <svg
-              className="mb-4 h-24 w-24 text-gray-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-            <p className="text-xl">Select a session to view telemetry data</p>
-            <p className="mt-2 text-sm text-gray-500">
-              Real-time data will stream via WebSocket
-            </p>
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gray-800/80 shadow-inner">
+              <svg className="h-10 w-10 text-f1-red" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h2 className="mb-4 text-2xl font-bold text-white tracking-wide">Welcome to Live Telemetry</h2>
+            <div className="max-w-md text-gray-400 space-y-4">
+              <p>
+                Follow the numbered steps at the top of the screen to begin:
+              </p>
+              <ol className="text-left space-y-4 mt-6">
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-800 text-xs font-bold text-white">1</span>
+                  <span className="text-sm">Select a <strong className="text-white">Meeting</strong> (e.g., Bahrain Grand Prix)</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-800 text-xs font-bold text-white">2</span>
+                  <span className="text-sm">Pick the specific <strong className="text-white">Session</strong> (e.g., Race, Qualifying) to connect to the telemetry stream.</span>
+                </li>
+              </ol>
+            </div>
           </motion.div>
         )}
       </div>

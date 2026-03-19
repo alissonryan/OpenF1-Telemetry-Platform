@@ -15,7 +15,11 @@ from app.core.logging import logger
 from app.ml.pit_predictor import PitStopPredictor
 from app.ml.position_forecast import PositionForecaster
 from app.ml.strategy_recommender import StrategyRecommender
-from app.ml.feature_engineer import FeatureEngineer
+
+try:
+    from app.ml.feature_engineer import FeatureEngineer
+except ImportError:
+    FeatureEngineer = None  # type: ignore[assignment,misc]
 
 
 class ModelTrainingPipeline:
@@ -24,11 +28,11 @@ class ModelTrainingPipeline:
     def __init__(self):
         self.models_dir = Path(settings.models_dir)
         self.models_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.cache_dir = Path(settings.fastf1_cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.feature_engineer = FeatureEngineer()
+
+        self.feature_engineer = FeatureEngineer() if FeatureEngineer is not None else None
         self.pit_predictor = PitStopPredictor()
         self.position_forecaster = PositionForecaster()
         self.strategy_recommender = StrategyRecommender()

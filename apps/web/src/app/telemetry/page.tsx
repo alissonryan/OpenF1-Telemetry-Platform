@@ -57,6 +57,28 @@ interface FastestLapPayload {
   lap_duration?: number;
 }
 
+interface PitStop {
+  driver_number: number;
+  lap_number?: number | null;
+  pit_duration?: number | null;
+  date: string;
+}
+
+interface Stint {
+  driver_number: number;
+  stint_number?: number | null;
+  lap_start?: number | null;
+  lap_end?: number | null;
+  compound?: string | null;
+  tyre_age_at_start?: number | null;
+}
+
+interface TeamRadioMessage {
+  driver_number: number;
+  date: string;
+  recording_url?: string | null;
+}
+
 interface PositionResponse {
   data: LivePositionData[];
 }
@@ -81,6 +103,16 @@ export default function TelemetryPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
 
+  const [pitStops, setPitStops] = useState<PitStop[]>([]);
+  const [stints, setStints] = useState<Stint[]>([]);
+  const [teamRadio, setTeamRadio] = useState<TeamRadioMessage[]>([]);
+  const [isPitOpen, setIsPitOpen] = useState(false);
+  const [isRadioOpen, setIsRadioOpen] = useState(false);
+  const [isPitLoading, setIsPitLoading] = useState(false);
+  const [isRadioLoading, setIsRadioLoading] = useState(false);
+  const [pitError, setPitError] = useState<string | null>(null);
+  const [radioError, setRadioError] = useState<string | null>(null);
+
   const {
     telemetry,
     positions: livePositions,
@@ -104,6 +136,11 @@ export default function TelemetryPage() {
     const loadContext = async () => {
       setIsLoading(true);
       setPageError(null);
+      setPitStops([]);
+      setStints([]);
+      setTeamRadio([]);
+      setIsPitOpen(false);
+      setIsRadioOpen(false);
       try {
         const [
           sessionPayload,
@@ -184,6 +221,103 @@ export default function TelemetryPage() {
   }, [selectedSession]);
 
   useEffect(() => {
+    if (!selectedSession || !isPitOpen) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadPitData = async () => {
+      setIsPitLoading(true);
+      setPitError(null);
+      try {
+        const [pitPayload, stintPayload] = await Promise.all([
+          apiFetch<PitStop[]>(`/api/sessions/${selectedSession}/pit`),
+          apiFetch<Stint[]>(`/api/sessions/${selectedSession}/stints`),
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setPitStops(
+          [...(pitPayload || [])]
+            .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+        );
+        setStints(stintPayload || []);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setPitError(
+          error instanceof ApiError
+            ? error.message
+            : 'Failed to load pit stop data.'
+        );
+      } finally {
+        if (isMounted) {
+          setIsPitLoading(false);
+        }
+      }
+    };
+
+    loadPitData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSession, isPitOpen]);
+
+  useEffect(() => {
+    if (!selectedSession || !isRadioOpen) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadRadioData = async () => {
+      setIsRadioLoading(true);
+      setRadioError(null);
+      try {
+        const radioPayload = await apiFetch<TeamRadioMessage[]>(
+          `/api/sessions/${selectedSession}/team-radio`
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setTeamRadio(
+          [...(radioPayload || [])]
+            .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+            .slice(0, 20)
+        );
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setRadioError(
+          error instanceof ApiError
+            ? error.message
+            : 'Failed to load team radio data.'
+        );
+      } finally {
+        if (isMounted) {
+          setIsRadioLoading(false);
+        }
+      }
+    };
+
+    loadRadioData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedSession, isRadioOpen]);
+
+  useEffect(() => {
     if (livePositions.length > 0) {
       setPositions(getLatestPositions(livePositions));
     }
@@ -238,6 +372,16 @@ export default function TelemetryPage() {
       }),
     [positions, telemetry]
   );
+
+  const getDriverAcronym = (driverNumber: number): string => {
+    const driver = drivers.find((d) => d.driver_number === driverNumber);
+    return driver?.name_acronym || `#${driverNumber}`;
+  };
+
+  const getDriverColour = (driverNumber: number): string => {
+    const driver = drivers.find((d) => d.driver_number === driverNumber);
+    return driver?.team_colour || 'ffffff';
+  };
 
   const toggleDriver = (driverNumber: number) => {
     setSelectedDrivers((current) =>
@@ -462,6 +606,219 @@ export default function TelemetryPage() {
                 </Surface>
               </div>
             </div>
+
+            {/* Pit Stop Monitor */}
+            <Surface
+              title="Pit Stop Monitor"
+              subtitle="Pit events and stint information for all drivers."
+            >
+              <button
+                type="button"
+                onClick={() => setIsPitOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 text-left transition hover:bg-white/[0.06]"
+              >
+                <span className="text-sm font-medium text-white">
+                  {isPitOpen ? 'Hide' : 'Show'} Pit Stop Data
+                </span>
+                <svg
+                  className={`h-4 w-4 text-slate-400 transition-transform ${isPitOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {isPitOpen ? (
+                <div className="mt-4 space-y-4">
+                  {isPitLoading ? (
+                    <p className="text-sm text-slate-400">Loading pit stop data...</p>
+                  ) : pitError ? (
+                    <p className="text-sm text-red-300">{pitError}</p>
+                  ) : (
+                    <>
+                      {/* Pit Events Timeline */}
+                      <div>
+                        <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                          Pit Events
+                        </h4>
+                        {pitStops.length === 0 ? (
+                          <EmptyState
+                            title="No pit stops recorded"
+                            description="Pit events will appear here as drivers enter the pit lane."
+                            icon={
+                              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                              </svg>
+                            }
+                          />
+                        ) : (
+                          <div className="space-y-2">
+                            {pitStops.map((pit, idx) => (
+                              <div
+                                key={`pit-${pit.driver_number}-${pit.date}-${idx}`}
+                                className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3"
+                              >
+                                <div
+                                  className="h-8 w-1 rounded-full"
+                                  style={{ backgroundColor: `#${getDriverColour(pit.driver_number)}` }}
+                                />
+                                <div className="flex-1 space-y-0.5">
+                                  <p className="text-sm font-medium text-white">
+                                    {getDriverAcronym(pit.driver_number)}
+                                    {pit.lap_number != null ? ` — Lap ${pit.lap_number}` : ''}
+                                  </p>
+                                  <p className="text-xs text-slate-400">
+                                    {pit.pit_duration != null
+                                      ? `Duration: ${pit.pit_duration.toFixed(1)}s`
+                                      : 'Duration pending'}
+                                  </p>
+                                </div>
+                                <span className="font-mono text-xs uppercase tracking-[0.2em] text-slate-500">
+                                  {new Date(pit.date).toLocaleTimeString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Current Stints */}
+                      <div>
+                        <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">
+                          Current Stints
+                        </h4>
+                        {stints.length === 0 ? (
+                          <EmptyState
+                            title="No stint data available"
+                            description="Stint information will appear here once tyre data is published."
+                            icon={
+                              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            }
+                          />
+                        ) : (
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {getLatestStints(stints).map((stint) => (
+                              <div
+                                key={`stint-${stint.driver_number}-${stint.stint_number}`}
+                                className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3"
+                              >
+                                <div
+                                  className="h-8 w-1 rounded-full"
+                                  style={{ backgroundColor: `#${getDriverColour(stint.driver_number)}` }}
+                                />
+                                <div className="flex-1 space-y-0.5">
+                                  <p className="text-sm font-medium text-white">
+                                    {getDriverAcronym(stint.driver_number)}
+                                  </p>
+                                  <p className="text-xs text-slate-400">
+                                    {[
+                                      stint.compound ? `${stint.compound}` : null,
+                                      stint.stint_number != null ? `Stint ${stint.stint_number}` : null,
+                                      stint.lap_start != null && stint.lap_end != null
+                                        ? `Laps ${stint.lap_start}–${stint.lap_end}`
+                                        : stint.lap_start != null
+                                          ? `From lap ${stint.lap_start}`
+                                          : null,
+                                      stint.tyre_age_at_start != null
+                                        ? `Age: ${stint.tyre_age_at_start} laps`
+                                        : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </Surface>
+
+            {/* Team Radio Feed */}
+            <Surface
+              title="Team Radio Feed"
+              subtitle="Recent team radio messages from the session."
+            >
+              <button
+                type="button"
+                onClick={() => setIsRadioOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-xl border border-white/8 bg-white/[0.03] px-4 py-3 text-left transition hover:bg-white/[0.06]"
+              >
+                <span className="text-sm font-medium text-white">
+                  {isRadioOpen ? 'Hide' : 'Show'} Team Radio
+                </span>
+                <svg
+                  className={`h-4 w-4 text-slate-400 transition-transform ${isRadioOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {isRadioOpen ? (
+                <div className="mt-4">
+                  {isRadioLoading ? (
+                    <p className="text-sm text-slate-400">Loading team radio data...</p>
+                  ) : radioError ? (
+                    <p className="text-sm text-red-300">{radioError}</p>
+                  ) : teamRadio.length === 0 ? (
+                    <EmptyState
+                      title="No team radio messages"
+                      description="Team radio messages will appear here when they are published during the session."
+                      icon={
+                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                      }
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      {teamRadio.map((radio, idx) => (
+                        <div
+                          key={`radio-${radio.driver_number}-${radio.date}-${idx}`}
+                          className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3"
+                        >
+                          <div
+                            className="h-8 w-1 rounded-full"
+                            style={{ backgroundColor: `#${getDriverColour(radio.driver_number)}` }}
+                          />
+                          <div className="flex-1 space-y-0.5">
+                            <p className="text-sm font-medium text-white">
+                              {getDriverAcronym(radio.driver_number)}
+                            </p>
+                            {radio.recording_url ? (
+                              <a
+                                href={radio.recording_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-sky-400 underline decoration-sky-400/30 hover:decoration-sky-400"
+                              >
+                                Listen to recording
+                              </a>
+                            ) : (
+                              <p className="text-xs text-slate-400">No recording available</p>
+                            )}
+                          </div>
+                          <span className="font-mono text-xs uppercase tracking-[0.2em] text-slate-500">
+                            {new Date(radio.date).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </Surface>
           </>
         ) : null}
 
@@ -506,4 +863,20 @@ function getLatestIntervals(intervals: IntervalData[]): IntervalData[] {
       latest.set(interval.driver_number, interval);
     });
   return Array.from(latest.values());
+}
+
+function getLatestStints(stints: Stint[]): Stint[] {
+  const latest = new Map<number, Stint>();
+  stints.forEach((stint) => {
+    const existing = latest.get(stint.driver_number);
+    if (
+      !existing ||
+      (stint.stint_number ?? 0) > (existing.stint_number ?? 0)
+    ) {
+      latest.set(stint.driver_number, stint);
+    }
+  });
+  return Array.from(latest.values()).sort(
+    (a, b) => a.driver_number - b.driver_number
+  );
 }
