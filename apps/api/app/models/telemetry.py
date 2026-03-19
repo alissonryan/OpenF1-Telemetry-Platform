@@ -204,23 +204,23 @@ class DriverResponse(BaseModel):
     """Driver information response model."""
 
     driver_number: int = Field(..., ge=1, le=99)
-    broadcast_name: str = Field(..., description="Name used in broadcasts")
-    full_name: str = Field(..., description="Driver's full name")
+    broadcast_name: Optional[str] = Field(None, description="Name used in broadcasts")
+    full_name: Optional[str] = Field(None, description="Driver's full name")
     first_name: Optional[str] = Field(None, description="Driver's first name")
     last_name: Optional[str] = Field(None, description="Driver's last name")
-    name_acronym: str = Field(
-        ...,
+    name_acronym: Optional[str] = Field(
+        None,
         min_length=3,
         max_length=3,
         description="3-letter driver code",
     )
-    team_name: str = Field(..., description="Team/constructor name")
-    team_colour: str = Field(
-        ...,
+    team_name: Optional[str] = Field(None, description="Team/constructor name")
+    team_colour: Optional[str] = Field(
+        None,
         description="Team's hex color code (e.g., '00A19C')",
     )
-    country_code: str = Field(
-        ...,
+    country_code: Optional[str] = Field(
+        None,
         min_length=3,
         max_length=3,
         description="ISO country code",
