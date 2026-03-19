@@ -61,10 +61,15 @@ export default function ConnectionStatus({
   // Calculate time since last heartbeat
   const getTimeSinceHeartbeat = () => {
     if (!lastHeartbeat) return null;
-    const seconds = Math.floor((Date.now() - lastHeartbeat) / 1000);
+    const diffMs = Date.now() - lastHeartbeat;
+    // Guard against negative or absurd values (> 24 hours)
+    if (diffMs < 0 || diffMs > 86_400_000) return 'Archived session';
+    const seconds = Math.floor(diffMs / 1000);
     if (seconds < 60) return `${seconds}s ago`;
     const minutes = Math.floor(seconds / 60);
-    return `${minutes}m ago`;
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
   };
 
   return (

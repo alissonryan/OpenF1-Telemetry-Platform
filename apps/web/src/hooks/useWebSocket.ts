@@ -204,7 +204,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
           break;
 
         case 'heartbeat':
-          setLastHeartbeat(message.timestamp || Date.now());
+          // Server sends time.time() (seconds); convert to ms for Date.now() compat
+          const ts = message.timestamp;
+          const heartbeatMs = ts && ts < 1e12 ? ts * 1000 : (ts ?? Date.now());
+          setLastHeartbeat(heartbeatMs);
           break;
 
         case 'pong':

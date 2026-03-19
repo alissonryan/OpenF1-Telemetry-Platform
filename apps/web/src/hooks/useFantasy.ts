@@ -6,7 +6,6 @@ import type {
   TeamRecommendation,
   ComparisonResult,
   DifferentialPick,
-  ValuePlaysResponse,
   ScoringSystem,
   BudgetInfo,
   FantasyTeam,
@@ -46,7 +45,7 @@ interface UseFantasyReturn {
   fetchDrivers: (sortBy?: SortOption) => Promise<void>;
   fetchTeamRecommendation: (strategy?: 'balanced' | 'value' | 'premium') => Promise<void>;
   fetchValuePlays: (limit?: number) => Promise<void>;
-  fetchDifferentialPicks: (threshold?: number) => Promise<void>;
+  fetchDifferentialPicks: (budgetAfterCore?: number) => Promise<void>;
   compareDrivers: (driver1Id: string, driver2Id: string) => Promise<ComparisonResult | null>;
   predictDriver: (driverId: string) => Promise<FantasyDriverPrediction | null>;
   
@@ -62,6 +61,28 @@ interface UseFantasyReturn {
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// Map backend FantasyPrediction schema to frontend FantasyDriverPrediction
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapPrediction(raw: any): FantasyDriverPrediction {
+  return {
+    driver_id: String(raw.driver_id),
+    driver_name: raw.driver_name ?? `Driver ${raw.driver_id}`,
+    team_name: raw.team_name ?? '',
+    price: raw.price ?? 0,
+    predicted_qualifying_position: raw.expected_qualifying_position ?? 0,
+    predicted_race_position: raw.expected_race_position ?? 0,
+    predicted_qualifying_points: raw.qualifying_points ?? 0,
+    predicted_race_points: raw.race_points ?? 0,
+    predicted_bonus_points: raw.bonus_points ?? 0,
+    predicted_total_points: raw.total_expected_points ?? 0,
+    confidence: raw.confidence ?? 0,
+    points_per_million: raw.points_per_million ?? 0,
+    factors: raw.reasons ?? [],
+    avg_points_last_5: raw.total_expected_points ?? 0,
+    season_avg_points: raw.total_expected_points ?? 0,
+  };
+}
 
 const DEFAULT_BUDGET = 100.0;
 const MAX_DRIVERS = 5;
@@ -105,20 +126,31 @@ export function useFantasy(options: UseFantasyOptions = {}): UseFantasyReturn {
   const fetchDrivers = useCallback(async (sortBy: SortOption = 'points') => {
     setIsLoadingDrivers(true);
     setDriversError(null);
-    
+
     try {
-      const params = new URLSearchParams({ sort_by: sortBy });
+      const params = new URLSearchParams();
       if (circuitId) {
         params.append('circuit_id', circuitId);
       }
-      
-      const response = await fetch(`${API_BASE}/api/fantasy/drivers?${params}`);
-      
+
+      const response = await fetch(`${API_BASE}/api/fantasy/predict/all?${params}`, {
+        method: 'POST',
+      });
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
-      const data: FantasyDriverPrediction[] = await response.json();
+
+      const raw = await response.json();
+      const data: FantasyDriverPrediction[] = raw.map(mapPrediction);
+
+      // Sort client-side since backend always sorts by expected points
+      if (sortBy === 'price') {
+        data.sort((a, b) => b.price - a.price);
+      } else if (sortBy === 'value') {
+        data.sort((a, b) => b.points_per_million - a.points_per_million);
+      }
+
       setDrivers(data);
     } catch (err) {
       console.error('Failed to fetch drivers:', err);
@@ -161,16 +193,17 @@ export function useFantasy(options: UseFantasyOptions = {}): UseFantasyReturn {
   // Fetch value plays
   const fetchValuePlays = useCallback(async (limit: number = 10) => {
     setIsLoadingValuePlays(true);
-    
+
     try {
       const response = await fetch(`${API_BASE}/api/fantasy/value-plays?limit=${limit}`);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
-      const data: ValuePlaysResponse = await response.json();
-      setValuePlays(data.data);
+
+      // Backend returns List[FantasyPrediction] directly
+      const raw = await response.json();
+      setValuePlays(raw.map(mapPrediction));
     } catch (err) {
       console.error('Failed to fetch value plays:', err);
     } finally {
@@ -179,25 +212,31 @@ export function useFantasy(options: UseFantasyOptions = {}): UseFantasyReturn {
   }, []);
   
   // Fetch differential picks
-  const fetchDifferentialPicks = useCallback(async (threshold: number = 30) => {
+  const fetchDifferentialPicks = useCallback(async (budgetAfterCore: number = 30) => {
     try {
-      const params = new URLSearchParams({ threshold: threshold.toString() });
-      if (circuitId) {
-        params.append('circuit_id', circuitId);
-      }
-      
+      const params = new URLSearchParams({ budget_after_core: budgetAfterCore.toString() });
+
       const response = await fetch(`${API_BASE}/api/fantasy/differential?${params}`);
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      
-      const data: DifferentialPick[] = await response.json();
-      setDifferentialPicks(data);
+
+      const data = await response.json();
+      const rawDiffs = data.differentials ?? [];
+      // Map raw FantasyPrediction to DifferentialPick shape
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped: DifferentialPick[] = rawDiffs.map((raw: any) => ({
+        driver: mapPrediction(raw),
+        ownership_pct: raw.confidence ? (1 - raw.confidence) * 100 : 50,
+        differential_score: raw.points_per_million ?? 0,
+        reasoning: raw.reasons?.[0] ?? raw.risk_level ?? 'Differential pick',
+      }));
+      setDifferentialPicks(mapped);
     } catch (err) {
       console.error('Failed to fetch differential picks:', err);
     }
-  }, [circuitId]);
+  }, []);
   
   // Compare two drivers
   const compareDrivers = useCallback(async (driver1Id: string, driver2Id: string): Promise<ComparisonResult | null> => {
@@ -234,7 +273,9 @@ export function useFantasy(options: UseFantasyOptions = {}): UseFantasyReturn {
         params.append('circuit_id', circuitId);
       }
       
-      const response = await fetch(`${API_BASE}/api/fantasy/predict/${driverId}?${params}`);
+      const response = await fetch(`${API_BASE}/api/fantasy/predict/${driverId}?${params}`, {
+        method: 'POST',
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -247,26 +288,40 @@ export function useFantasy(options: UseFantasyOptions = {}): UseFantasyReturn {
     }
   }, [circuitId]);
   
-  // Fetch scoring system
+  // Scoring system (static - no backend endpoint)
   const fetchScoringSystem = useCallback(async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/fantasy/scoring`);
-      if (response.ok) {
-        const data = await response.json();
-        setScoringSystem(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch scoring system:', err);
-    }
+    setScoringSystem({
+      qualifying_points: { 1: 10, 2: 9, 3: 8, 4: 7, 5: 6, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1 },
+      race_points: { 1: 25, 2: 18, 3: 15, 4: 12, 5: 10, 6: 8, 7: 6, 8: 4, 9: 2, 10: 1 },
+      bonus_points: {
+        fastest_lap: 5,
+        pole_position: 5,
+        driver_of_the_day: 10,
+        overtake: 2,
+      },
+      rules: {
+        team_size: '5 drivers + 1 constructor',
+        budget_cap: '100M',
+        transfers: '3 free transfers per race week',
+      },
+    });
   }, []);
   
-  // Fetch budget info
+  // Fetch budget info from /prices endpoint
   const fetchBudgetInfo = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/fantasy/budget`);
+      const response = await fetch(`${API_BASE}/api/fantasy/prices`);
       if (response.ok) {
         const data = await response.json();
-        setBudgetInfo(data);
+        setBudgetInfo({
+          default_budget: DEFAULT_BUDGET,
+          driver_prices: data.drivers ?? {},
+          constructor_prices: data.constructors ?? {},
+          team_composition: {
+            drivers: MAX_DRIVERS,
+            constructors: 1,
+          },
+        });
       }
     } catch (err) {
       console.error('Failed to fetch budget info:', err);

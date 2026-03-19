@@ -11,36 +11,7 @@ from app.ml.fantasy_predictor import (
 )
 
 
-router = APIRouter(prefix="/fantasy", tags=["Fantasy F1"])
-
-
-@router.post("/predict/{driver_id}", response_model=FantasyPrediction)
-async def predict_driver_points(
-    driver_id: int,
-    circuit_id: Optional[str] = Query(None, description="Circuit identifier"),
-):
-    """
-    Predict fantasy points for a specific driver.
-    
-    Returns expected points breakdown and value metrics.
-    """
-    predictor = get_fantasy_predictor()
-    
-    try:
-        # Get driver info from F1DB (simplified for now)
-        driver_name = f"Driver {driver_id}"
-        team_name = predictor._get_team_for_driver(driver_id)
-        
-        prediction = predictor.predict_points(
-            driver_id=driver_id,
-            driver_name=driver_name,
-            team_name=team_name,
-            circuit_id=circuit_id,
-        )
-        
-        return prediction
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+router = APIRouter(tags=["Fantasy F1"])
 
 
 @router.post("/predict/all", response_model=List[FantasyPrediction])
@@ -49,17 +20,17 @@ async def predict_all_drivers(
 ):
     """
     Predict fantasy points for all drivers.
-    
+
     Returns sorted list by expected points.
     """
     predictor = get_fantasy_predictor()
-    
+
     predictions = []
     for driver_id in predictor.DRIVER_PRICES.keys():
         try:
             driver_name = f"Driver {driver_id}"
             team_name = predictor._get_team_for_driver(driver_id)
-            
+
             pred = predictor.predict_points(
                 driver_id=driver_id,
                 driver_name=driver_name,
@@ -69,11 +40,40 @@ async def predict_all_drivers(
             predictions.append(pred)
         except Exception:
             continue
-    
+
     # Sort by expected points (descending)
     predictions.sort(key=lambda x: x.total_expected_points, reverse=True)
-    
+
     return predictions
+
+
+@router.post("/predict/{driver_id}", response_model=FantasyPrediction)
+async def predict_driver_points(
+    driver_id: int,
+    circuit_id: Optional[str] = Query(None, description="Circuit identifier"),
+):
+    """
+    Predict fantasy points for a specific driver.
+
+    Returns expected points breakdown and value metrics.
+    """
+    predictor = get_fantasy_predictor()
+
+    try:
+        # Get driver info from F1DB (simplified for now)
+        driver_name = f"Driver {driver_id}"
+        team_name = predictor._get_team_for_driver(driver_id)
+
+        prediction = predictor.predict_points(
+            driver_id=driver_id,
+            driver_name=driver_name,
+            team_name=team_name,
+            circuit_id=circuit_id,
+        )
+
+        return prediction
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/recommend", response_model=TeamRecommendation)
